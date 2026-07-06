@@ -298,7 +298,7 @@ npm run dev
 
 ### Pendientes Críticos
 
-- [ ] **FASE 4 — Vulnerabilidad IDOR en activación de tiendas:** El endpoint `/admin/activate-shop` solo verifica un usuario autenticado genérico. Debe protegerse con un `admin_guard` de super-administrador global. Activación disponible por ahora vía CLI (`scripts/activate_shop.py`).
+- [ ] **Vulnerabilidad IDOR en activación de tiendas:** El endpoint `/admin/activate-shop` solo verifica un usuario autenticado genérico. Debe protegerse con un `admin_guard` de super-administrador global. Activación disponible por ahora vía CLI (`scripts/activate_shop.py`).
 - [ ] **Blacklist de JWT con Redis:** Los Access Tokens (60 min) sobreviven al logout manual. Pendiente implementar invalidación inmediata con TTL en Redis.
 
 ### Mejoras Planificadas
@@ -310,17 +310,17 @@ npm run dev
 
 ---
 
-## 📋 Historial de Correcciones
+## 📋 Changelog
 
-| Fase | Descripción |
+| Área | Descripción |
 |---|---|
-| **FASE 1 (BUG-02)** | Pérdida de datos del cliente al cambiar estados → `selectinload` en SQLAlchemy + preservación de estado local en React |
-| **FASE 2 (BUG-01)** | Desaparición del PIN y correo al crear tickets → endpoint POST retorna esquema anidado completo `TicketListResponse` |
-| **FASE 3 (BUG-03)** | Subida de evidencia desde modal de creación → pipeline secuencial con `FormData` nativo |
-| **FASE 5** | Estadísticas reales del dashboard → endpoint `GET /tickets/stats` con `COUNT() FILTER` en PostgreSQL |
-| **Fix PIN** | Parpadeo "Sin PIN" tras actualización → `update_ticket_status`, `update_ticket_diagnostic` y `assign_technician` desencriptan antes de retornar |
-| **Whitelabeling** | Portal de rastreo con nombre y logo dinámico del taller → `shop_name` + `shop_logo_url` en `PublicTicketResponse`; columna `logo_url` en tabla `shops` |
-| **WhatsApp** | Botón de WhatsApp ausente en registros antiguos → `contact_whatsapp` capturado en onboarding; backend retorna `None` en vez de string vacío |
+| **Estabilidad de datos** | Pérdida de datos del cliente al cambiar estados → `selectinload` en SQLAlchemy + preservación de estado local en React |
+| **Integridad de ticket** | Desaparición del PIN y correo al crear tickets → endpoint POST retorna esquema anidado completo |
+| **Evidencias fotográficas** | Subida de evidencia desde el modal de creación → pipeline secuencial con `FormData` nativo |
+| **Estadísticas reales** | Métricas del dashboard truncadas → endpoint `GET /tickets/stats` con `COUNT() FILTER` en PostgreSQL |
+| **Fix PIN en actualizaciones** | Parpadeo "Sin PIN" tras cambios de estado → desencriptado en los tres servicios de actualización antes de retornar |
+| **Whitelabeling** | Portal de rastreo con nombre y logo dinámico del taller → `shop_name` + `shop_logo_url` en `PublicTicketResponse` |
+| **Canal WhatsApp** | Botón ausente en cuentas antiguas → campo `contact_whatsapp` capturado en onboarding; API retorna `null` en vez de string vacío |
 
 ---
 
