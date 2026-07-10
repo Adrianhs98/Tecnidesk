@@ -1,0 +1,44 @@
+# Entorno / virtualenv
+.env
+.env*
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+*.pyd
+.mypy_cache/
+.pytest_cache/
+
+# Scripts de pruebas / experimentos
+test_*.py
+*_test.py
+tests/
+scripts/tmp/
+scripts/experimental/
+scratch/
+sandbox/
+playground/
+
+# Logs y outputs
+*.log
+*.txt
+test_results*.json
+uvicorn*.log
+verification_results*.log
+verification_results_utf8*.log
+db_state.txt
+schema_output.txt
+test_db_output.txt
+result*.txt
+err*.txt
+alembic_error.txt
+alembic_r*.txt
+alembic_result*.txt
+alembic_result2*.txt
+
+# Node (si luego lo separas)
+node_modules/
+dist/

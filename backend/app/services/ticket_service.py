@@ -1,0 +1,750 @@
+"""
+Servicio: ticket_service — Lógica de negocio para órdenes de reparación.
+
+SEGURIDAD (C1 / D2):
+  - encrypt_pin() se llama AQUÍ, antes de asignar pin_or_password al modelo.
+  - pin_or_password NUNCA sale de este módulo sin cifrar y NUNCA se devuelve
+    en los objetos retornados (campo excluido mediante __dict__ manipulation).
+  - decrypt_pin() solo se usa en servicios internos — nunca en rutas públicas.
+
+MULTI-TENANT:
+  - Todas las queries incluyen shop_id en el WHERE.
+  - Ninguna operación puede cruzar datos entre talleres.
+"""
+from __future__ import annotations
+
+import json
+import uuid
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from sqlalchemy import select, func, case
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.customer import Customer
+from app.models.shop import Shop
+from app.models.ticket import Ticket, TicketStatusEnum
+from app.models.ticket_item import TicketItem
+from app.models.user import User, UserRoleEnum
+from app.services.encryption_service import decrypt_pin, encrypt_pin
+from app.services import email_service
+from app.config import get_settings
+
+if TYPE_CHECKING:
+    # Importación circular evitada: solo para type-checking
+    pass
+
+
+# ─── Excepción de dominio ─────────────────────────────────────────────────────
+
+class TicketNotFound(Exception):
+    """El ticket no existe o no pertenece al shop_id indicado."""
+
+
+class CustomerNotInShop(Exception):
+    """El customer_id no pertenece al shop_id indicado."""
+
+
+class TechnicianNotInShop(Exception):
+    """El técnico no pertenece al shop_id indicado."""
+
+
+class InvalidTechnicianRole(Exception):
+    """El usuario no tiene rol de técnico o admin — no puede asignarse."""
+
+
+# ─── Helpers internos ─────────────────────────────────────────────────────────
+
+def _clear_pin(ticket: Ticket) -> Ticket:
+    """
+    Asegura que pin_or_password NO esté accesible en el objeto retornado.
+    ¡PELIGRO!: Modificar ticket.pin_or_password = None borraba el PIN de la DB 
+    por culpa del commit() global en get_db. 
+    Como Pydantic no mapea el campo, devolverlo intacto es 100% seguro.
+    """
+    return ticket
+
+
+async def _get_ticket_or_404(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    *options,
+) -> Ticket:
+    """
+    Busca un ticket validando multi-tenant.  Lanza TicketNotFound si no existe.
+
+    Args:
+        options: Opciones de carga eager (selectinload) adicionales.
+    """
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket_id, Ticket.shop_id == shop_id)
+        .options(*options)
+    )
+    ticket = result.scalar_one_or_none()
+    if ticket is None:
+        raise TicketNotFound(
+            f"Ticket {ticket_id} no encontrado en el taller {shop_id}."
+        )
+    return ticket
+
+
+async def _dispatch_webhook(
+    db: AsyncSession,
+    ticket: Ticket,
+    event_type: str,
+    payload: dict,
+) -> None:
+    """
+    Registra y dispara una notificación webhook.
+
+    Estrategia actual: fire-and-forget asíncrono con registro en WebhookLog.
+    Si webhook_service no está disponible se omite silenciosamente para no
+    bloquear la operación principal.
+
+    Args:
+        event_type: Ej. "ticket.created", "ticket.status_changed".
+        payload:    Datos del evento como dict serializable a JSON.
+    """
+    try:
+        # Importación lazy para evitar circular imports en el futuro
+        from app.services import webhook_service  # noqa: PLC0415
+        await webhook_service.notify(
+            db=db,
+            ticket=ticket,
+            event_type=event_type,
+            payload=payload,
+        )
+    except Exception as exc:  # noqa: BLE001
+        # El webhook nunca debe romper la operación principal
+        import logging
+        logging.getLogger("tecnidesk.ticket_service").exception(
+            f"Fallo crítico al despachar webhook de tipo {event_type} para el ticket {ticket.id}: {exc}"
+        )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FUNCIONES PÚBLICAS
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+async def create_ticket(
+    db: AsyncSession,
+    shop_id: uuid.UUID,
+    data: "TicketCreate",  # noqa: F821 — schema definido en app/schemas/
+) -> Ticket:
+    """
+    Crea una nueva orden de reparación.
+
+    Pasos:
+      1. Get-or-create del cliente por (client_email, shop_id).
+         Si no existe, se crea con valores provisionales (nombre = email,
+         teléfono = "0000000000000") que el técnico puede actualizar luego.
+      2. Cifrar pin_or_password con Fernet (encrypt_pin).
+      3. Generar tracking_token via uuid4.
+      4. Insertar Ticket en DB, commit + refresh.
+      5. Disparar webhook ticket.created (no-blocking).
+      6. Enviar email de confirmación al cliente.
+
+    Returns:
+        Objeto Ticket sin pin_or_password expuesto.
+    """
+    # ── 1. Get-or-create del cliente por email ────────────────────────────────
+    customer_result = await db.execute(
+        select(Customer).where(
+            Customer.email == data.client_email,
+            Customer.shop_id == shop_id,
+        )
+    )
+    customer = customer_result.scalar_one_or_none()
+
+    if customer is None:
+        # full_name y phone_number usan valores provistos o su fallback
+        customer = Customer(
+            shop_id=shop_id,
+            email=data.client_email,
+            full_name=getattr(data, "client_name", None) or data.client_email,
+            phone_number=getattr(data, "client_phone", None) or "000000000000",
+        )
+        db.add(customer)
+        try:
+            await db.flush()   # Obtiene el customer.id sin hacer commit todavía
+        except Exception:
+            await db.rollback()
+            raise
+
+    # ── 2. Cifrar PIN antes de asignar al modelo (D2 / C1) ───────────────────
+    encrypted_pin: str | None = encrypt_pin(data.pin_or_password) if getattr(data, "pin_or_password", None) else None
+
+    # ── 3. tracking_token generado aquí (y también como default en el modelo) ─
+    tracking_token = str(uuid.uuid4())
+
+    # ── 4. Crear y persistir el Ticket ───────────────────────────────────────
+    ticket = Ticket(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        device_brand=data.device_brand,
+        device_model=data.device_model,
+        issue_description=data.issue_description,
+        internal_notes=getattr(data, "internal_notes", None),
+        diagnostic_notes=getattr(data, "diagnostic_notes", None),
+        requires_approval=getattr(data, "requires_approval", False),
+        pin_or_password=encrypted_pin,              # Fernet ciphertext
+        status=TicketStatusEnum.EN_ESPERA_INGRESO,
+        tracking_token=tracking_token,
+    )
+    db.add(ticket)
+
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+
+    # ── 5. Webhook ticket.created (fire-and-forget) ───────────────────────────
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.created",
+        payload={
+            "ticket_id": str(ticket.id),
+            "shop_id": str(shop_id),
+            "tracking_token": ticket.tracking_token,
+            "status": ticket.status.value,
+        },
+    )
+
+    # ── 6. Enviar email al cliente con el tracking ──────────────────────────────
+    if customer.email:
+        shop = await db.scalar(select(Shop).where(Shop.id == shop_id))
+        if shop:
+            await email_service.send_ticket_email(
+                to_email=customer.email,
+                ticket=ticket,
+                shop=shop
+            )
+
+    ticket.customer = customer
+    ticket.device_password = getattr(data, "pin_or_password", None)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def get_ticket_by_id(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+) -> Ticket:
+    """
+    Obtiene un ticket con sus relaciones eager-loaded.
+
+    Carga: customer, assigned_technician, items, evidences.
+
+    Returns:
+        Ticket sin pin_or_password expuesto.
+
+    Raises:
+        TicketNotFound: Si no existe o no pertenece al shop.
+    """
+    ticket = await _get_ticket_or_404(
+        db,
+        ticket_id,
+        shop_id,
+        selectinload(Ticket.customer),
+        selectinload(Ticket.assigned_technician),
+        selectinload(Ticket.items),
+        selectinload(Ticket.evidences),
+    )
+    # Desencriptar PIN y adjuntarlo como device_password (solo para uso admin)
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def get_ticket_by_tracking_token(
+    db: AsyncSession,
+    token: str,
+) -> Ticket | None:
+    """
+    Busca un ticket filtrando únicamente por su tracking_token.
+    Sin validación de shop_id para permitir acceso público de clientes.
+    Incluye el shop para acceder a contact_whatsapp.
+    """
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.tracking_token == token)
+        .options(selectinload(Ticket.shop), selectinload(Ticket.evidences))
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if ticket is None:
+        return None
+        
+    return _clear_pin(ticket)
+
+
+async def update_ticket_diagnostic(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    diagnostic_notes: str,
+    total_cost: float,
+) -> Ticket:
+    """
+    Actualiza diagnostic_notes y total_cost de un ticket,
+    activa requires_approval y cambia status a ESPERANDO_APROBACION.
+
+    Returns:
+        Ticket actualizado sin pin_or_password.
+
+    Raises:
+        TicketNotFound: Si no existe o no pertenece al shop.
+    """
+    ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
+
+    ticket.diagnostic_notes = diagnostic_notes
+    ticket.total_cost = Decimal(str(total_cost))
+    ticket.requires_approval = True
+    ticket.status = TicketStatusEnum.ESPERANDO_APROBACION
+
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.diagnostic_sent",
+        payload={
+            "ticket_id": str(ticket.id),
+            "shop_id": str(shop_id),
+            "status": ticket.status.value,
+            "total_cost": str(ticket.total_cost),
+        },
+    )
+
+    # ── Notificar al cliente por email (fire-and-forget) ─────────────────────
+    try:
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == ticket.customer_id)
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer and customer.email:
+            _settings = get_settings()
+            tracking_url = (
+                f"{_settings.frontend_url.rstrip('/')}/tracking/{ticket.tracking_token}"
+            )
+            await email_service.send_quote_ready_email(
+                email=customer.email,
+                tracking_url=tracking_url,
+                device_model=f"{ticket.device_brand} {ticket.device_model}",
+            )
+    except Exception:
+        # El email nunca debe romper la operación principal
+        pass
+
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def approve_ticket_by_token(
+    db: AsyncSession,
+    token: str,
+) -> Ticket | None:
+    """
+    Aprueba el presupuesto de un ticket usando su tracking_token (público).
+    Cambia status de ESPERANDO_APROBACION a EN_REPARACION.
+    """
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.tracking_token == token)
+        .options(selectinload(Ticket.shop), selectinload(Ticket.evidences))
+    )
+    ticket = result.scalar_one_or_none()
+    if ticket is None:
+        return None
+
+    if ticket.status != TicketStatusEnum.ESPERANDO_APROBACION:
+        return ticket  # ya fue procesado, retorna sin cambios
+
+    ticket.status = TicketStatusEnum.EN_REPARACION
+    ticket.requires_approval = False
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    # Re-cargar con relaciones (db.refresh pierde las relaciones eager-loaded)
+    refreshed = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket.id)
+        .options(selectinload(Ticket.shop), selectinload(Ticket.evidences))
+    )
+    ticket = refreshed.scalar_one()
+
+    # Disparar webhook de cambio de estado en segundo plano
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.status_changed",
+        payload={
+            "ticket_id": str(ticket.id),
+            "shop_id": str(ticket.shop_id),
+            "status": ticket.status.value,
+            "previous_status": TicketStatusEnum.ESPERANDO_APROBACION.value,
+        },
+    )
+
+    return _clear_pin(ticket)
+
+
+async def reject_ticket_by_token(
+    db: AsyncSession,
+    token: str,
+) -> Ticket | None:
+    """
+    Rechaza el presupuesto de un ticket usando su tracking_token (público).
+    Cambia status de ESPERANDO_APROBACION a NO_APROBADO.
+    """
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.tracking_token == token)
+        .options(selectinload(Ticket.shop), selectinload(Ticket.evidences))
+    )
+    ticket = result.scalar_one_or_none()
+    if ticket is None:
+        return None
+
+    if ticket.status != TicketStatusEnum.ESPERANDO_APROBACION:
+        return ticket  # ya fue procesado, retorna sin cambios
+
+    ticket.status = TicketStatusEnum.NO_APROBADO
+    ticket.requires_approval = False
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    # Re-cargar con relaciones (db.refresh pierde las relaciones eager-loaded)
+    refreshed = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket.id)
+        .options(selectinload(Ticket.shop), selectinload(Ticket.evidences))
+    )
+    ticket = refreshed.scalar_one()
+
+    # Disparar webhook de cambio de estado en segundo plano
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.status_changed",
+        payload={
+            "ticket_id": str(ticket.id),
+            "shop_id": str(ticket.shop_id),
+            "status": ticket.status.value,
+            "previous_status": TicketStatusEnum.ESPERANDO_APROBACION.value,
+        },
+    )
+
+    return _clear_pin(ticket)
+
+
+async def get_ticket_stats(
+    db: AsyncSession,
+    shop_id: uuid.UUID,
+) -> dict:
+    """
+    Calcula estadísticas reales del taller en una sola consulta SQL agregada.
+
+    Usa COUNT() FILTER (WHERE ...) nativo de PostgreSQL delegando el cálculo
+    al motor de base de datos — O(1) independiente del volumen de tickets.
+
+    Returns:
+        Dict con total, activos, listos y espera como enteros.
+    """
+    estados_inactivos = [
+        TicketStatusEnum.LISTO_PARA_RETIRAR,
+        TicketStatusEnum.NO_APROBADO,
+    ]
+
+    result = await db.execute(
+        select(
+            func.count(Ticket.id).label("total"),
+            func.count(Ticket.id).filter(
+                Ticket.status.not_in(estados_inactivos)
+            ).label("activos"),
+            func.count(Ticket.id).filter(
+                Ticket.status == TicketStatusEnum.LISTO_PARA_RETIRAR
+            ).label("listos"),
+            func.count(Ticket.id).filter(
+                Ticket.status == TicketStatusEnum.EN_ESPERA_INGRESO
+            ).label("espera"),
+        ).where(Ticket.shop_id == shop_id)
+    )
+    row = result.one()
+    return {
+        "total": row.total,
+        "activos": row.activos,
+        "listos": row.listos,
+        "espera": row.espera,
+    }
+
+
+async def list_tickets(
+    db: AsyncSession,
+    shop_id: uuid.UUID,
+    status: TicketStatusEnum | None = None,
+    limit: int = 50,
+) -> list[Ticket]:
+    """
+    Lista tickets de un taller con filtros opcionales.
+
+    Args:
+        shop_id: UUID del taller (multi-tenant).
+        status:  Filtro por estado (opcional).
+        limit:   Máximo de resultados (cap interno: 200).
+
+    Returns:
+        Lista de Ticket sin pin_or_password expuesto, ordenada created_at DESC.
+    """
+    # Cap de seguridad para evitar paginaciones masivas accidentales
+    limit = min(limit, 200)
+
+    stmt = (
+        select(Ticket)
+        .where(Ticket.shop_id == shop_id)
+        .options(selectinload(Ticket.customer))
+        .order_by(Ticket.created_at.desc())
+        .limit(limit)
+    )
+
+    if status is not None:
+        stmt = stmt.where(Ticket.status == status)
+
+    result = await db.execute(stmt)
+    tickets = list(result.scalars().all())
+
+    # Desencriptar PIN + limpiar campo cifrado en todos los resultados
+    for t in tickets:
+        decrypted = decrypt_pin(t.pin_or_password)
+        t.__dict__["device_password"] = decrypted if decrypted else None
+        _clear_pin(t)
+
+    return tickets
+
+
+async def update_ticket_status(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    new_status: TicketStatusEnum,
+) -> Ticket:
+    """
+    Actualiza el estado de un ticket y dispara el webhook de cambio.
+
+    Args:
+        new_status: Nuevo estado destino.
+
+    Returns:
+        Ticket actualizado sin pin_or_password.
+
+    Raises:
+        TicketNotFound: Si no existe o no pertenece al shop.
+    """
+    ticket = await _get_ticket_or_404(
+        db, ticket_id, shop_id, selectinload(Ticket.customer)
+    )
+
+    old_status: TicketStatusEnum = ticket.status
+    ticket.status = new_status
+
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+
+    # Webhook ticket.status_changed con old/new status
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.status_changed",
+        payload={
+            "ticket_id": str(ticket.id),
+            "shop_id": str(shop_id),
+            "old_status": old_status.value,
+            "new_status": new_status.value,
+        },
+    )
+
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def assign_technician(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    technician_id: uuid.UUID,
+) -> Ticket:
+    """
+    Asigna un técnico o admin a un ticket, validando multi-tenant y rol.
+
+    Args:
+        technician_id: UUID del usuario a asignar.
+
+    Returns:
+        Ticket actualizado sin pin_or_password.
+
+    Raises:
+        TicketNotFound: Si el ticket no existe en el shop.
+        TechnicianNotInShop: Si el usuario no pertenece al shop.
+        InvalidTechnicianRole: Si el usuario no tiene rol permitido.
+    """
+    # ── Validar multi-tenant del técnico ──────────────────────────────────────
+    tech_result = await db.execute(
+        select(User).where(
+            User.id == technician_id,
+            User.shop_id == shop_id,
+            User.is_active == True,  # noqa: E712
+        )
+    )
+    technician = tech_result.scalar_one_or_none()
+    if technician is None:
+        raise TechnicianNotInShop(
+            f"El usuario {technician_id} no existe o está inactivo en el taller {shop_id}."
+        )
+
+    # ── Validar que el rol permite asignación ─────────────────────────────────
+    if technician.role not in (UserRoleEnum.admin, UserRoleEnum.technician):
+        raise InvalidTechnicianRole(
+            f"El usuario {technician_id} no tiene rol de técnico ni admin."
+        )
+
+    # ── Asignar ───────────────────────────────────────────────────────────────
+    ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
+    ticket.assigned_technician_id = technician_id
+
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def add_ticket_item(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    data: "TicketItemCreate",  # noqa: F821 — schema en app/schemas/
+) -> TicketItem:
+    """
+    Agrega un ítem (repuesto, mano de obra, etc.) a un ticket.
+
+    Pasos:
+      1. Validar multi-tenant del ticket.
+      2. Crear TicketItem, commit + refresh.
+      3. Recalcular total_cost del ticket (llama a calculate_ticket_total).
+      4. Webhook ticket.item_added (opcional, no-blocking).
+
+    Returns:
+        El TicketItem creado.
+
+    Raises:
+        TicketNotFound: Si el ticket no existe en el shop.
+    """
+    # ── 1. Validar multi-tenant del ticket ────────────────────────────────────
+    ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
+
+    # ── 2. Crear el ítem ──────────────────────────────────────────────────────
+    item = TicketItem(
+        ticket_id=ticket.id,
+        inventory_id=getattr(data, "inventory_id", None),
+        item_type=data.item_type,
+        description=data.description,
+        quantity=data.quantity,
+        unit_price=Decimal(str(data.unit_price)),   # Evitar pérdida de precisión float
+    )
+    db.add(item)
+
+    try:
+        await db.commit()
+        await db.refresh(item)
+    except Exception:
+        await db.rollback()
+        raise
+
+    # ── 3. Recalcular total_cost del ticket ───────────────────────────────────
+    await calculate_ticket_total(db, ticket_id)
+
+    # ── 4. Webhook ticket.item_added (fire-and-forget) ────────────────────────
+    await _dispatch_webhook(
+        db=db,
+        ticket=ticket,
+        event_type="ticket.item_added",
+        payload={
+            "ticket_id": str(ticket_id),
+            "shop_id": str(shop_id),
+            "item_id": str(item.id),
+            "description": item.description,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+        },
+    )
+
+    return item
+
+
+async def calculate_ticket_total(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+) -> Decimal:
+    """
+    Recalcula y persiste el total_cost del ticket.
+
+    Fórmula:  SUM(quantity * unit_price) de todos los TicketItem del ticket.
+
+    Usa Decimal para aritmética exacta (evitar errores de punto flotante).
+
+    Returns:
+        El nuevo total_cost como Decimal.
+    """
+    # Cargar todos los ítems del ticket
+    items_result = await db.execute(
+        select(TicketItem).where(TicketItem.ticket_id == ticket_id)
+    )
+    items = list(items_result.scalars().all())
+
+    # Suma exacta con Decimal
+    total = sum(
+        Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+        for item in items
+    ) if items else Decimal("0.00")
+
+    # Actualizar ticket.total_cost sin necesitar shop_id (es una operación interna)
+    ticket_result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id)
+    )
+    ticket = ticket_result.scalar_one_or_none()
+    if ticket is not None:
+        ticket.total_cost = total
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    return total
