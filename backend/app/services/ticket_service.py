@@ -289,10 +289,10 @@ async def update_ticket_diagnostic(
     ticket_id: uuid.UUID,
     shop_id: uuid.UUID,
     diagnostic_notes: str,
-    total_cost: float,
+    labor_cost: float,
 ) -> Ticket:
     """
-    Actualiza diagnostic_notes y total_cost de un ticket,
+    Actualiza diagnostic_notes y labor_cost de un ticket,
     activa requires_approval y cambia status a ESPERANDO_APROBACION.
 
     Returns:
@@ -304,7 +304,39 @@ async def update_ticket_diagnostic(
     ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
 
     ticket.diagnostic_notes = diagnostic_notes
-    ticket.total_cost = Decimal(str(total_cost))
+
+    # Buscar si ya existe un item de labor general
+    from app.models.ticket_item import ItemTypeEnum
+    stmt = select(TicketItem).where(
+        TicketItem.ticket_id == ticket_id, 
+        TicketItem.item_type == ItemTypeEnum.labor,
+        TicketItem.description == "Mano de obra"
+    )
+    result = await db.execute(stmt)
+    labor_item = result.scalars().first()
+    
+    if labor_item:
+        labor_item.unit_price = Decimal(str(labor_cost))
+    else:
+        labor_item = TicketItem(
+            ticket_id=ticket.id,
+            item_type=ItemTypeEnum.labor,
+            description="Mano de obra",
+            quantity=1,
+            unit_price=Decimal(str(labor_cost)),
+            inventory_id=None
+        )
+        db.add(labor_item)
+        
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    # Recalcular el costo total sumando todos los items (ahora el nuevo de labor está incluido)
+    total_cost = await calculate_ticket_total(db, ticket_id)
+
     ticket.requires_approval = True
     ticket.status = TicketStatusEnum.ESPERANDO_APROBACION
 
@@ -669,6 +701,33 @@ async def add_ticket_item(
     # ── 1. Validar multi-tenant del ticket ────────────────────────────────────
     ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
 
+    # ── 1.b Validar inventario y descontar stock ──────────────────────────────
+    from app.models.ticket_item import ItemTypeEnum
+    unit_price = Decimal(str(data.unit_price))
+
+    if data.item_type == ItemTypeEnum.part and getattr(data, "inventory_id", None) is not None:
+        from app.models.inventory import Inventory
+        from sqlalchemy import update
+        from fastapi import HTTPException
+        
+        result = await db.execute(
+            update(Inventory)
+            .where(Inventory.id == data.inventory_id)
+            .where(Inventory.shop_id == shop_id)
+            .where(Inventory.stock_quantity >= data.quantity)
+            .values(stock_quantity=Inventory.stock_quantity - data.quantity)
+            .returning(Inventory.selling_price)
+        )
+        selling_price = result.scalar_one_or_none()
+        
+        if selling_price is None:
+            inv = await db.get(Inventory, data.inventory_id)
+            if not inv or inv.shop_id != shop_id:
+                raise HTTPException(status_code=404, detail="Item de inventario no encontrado")
+            raise HTTPException(status_code=409, detail=f"Stock insuficiente para '{inv.item_name}'")
+            
+        unit_price = Decimal(str(selling_price))
+
     # ── 2. Crear el ítem ──────────────────────────────────────────────────────
     item = TicketItem(
         ticket_id=ticket.id,
@@ -676,7 +735,7 @@ async def add_ticket_item(
         item_type=data.item_type,
         description=data.description,
         quantity=data.quantity,
-        unit_price=Decimal(str(data.unit_price)),   # Evitar pérdida de precisión float
+        unit_price=unit_price,
     )
     db.add(item)
 
@@ -706,6 +765,51 @@ async def add_ticket_item(
     )
 
     return item
+
+
+async def remove_ticket_item(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    item_id: uuid.UUID,
+) -> None:
+    """
+    Elimina un ítem de un ticket, restaura el stock (si es repuesto),
+    y recalcula el total_cost del ticket.
+    """
+    # 1. Validar ticket (multi-tenant)
+    await _get_ticket_or_404(db, ticket_id, shop_id)
+    
+    # 2. Buscar item
+    stmt = select(TicketItem).where(TicketItem.id == item_id, TicketItem.ticket_id == ticket_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+    
+    if not item:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Item no encontrado en el ticket")
+        
+    # 3. Restaurar stock si era pieza del inventario
+    from app.models.ticket_item import ItemTypeEnum
+    if item.item_type == ItemTypeEnum.part and item.inventory_id is not None:
+        from app.models.inventory import Inventory
+        from sqlalchemy import update
+        await db.execute(
+            update(Inventory)
+            .where(Inventory.id == item.inventory_id)
+            .values(stock_quantity=Inventory.stock_quantity + item.quantity)
+        )
+        
+    # 4. Eliminar item
+    await db.delete(item)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+        
+    # 5. Recalcular total
+    await calculate_ticket_total(db, ticket_id)
 
 
 async def calculate_ticket_total(

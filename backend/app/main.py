@@ -45,16 +45,14 @@ app.add_middleware(SlowAPIMiddleware)
 
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# Producción: solo subdominios de adriansaas.xyz
-# Desarrollo: orígenes adicionales desde ALLOWED_ORIGINS_DEV
-_prod_regex = r"^https://.*\.adriansaas\.xyz$"
+# Producción: solo subdominios de adriansaas.xyz y el dominio raíz
+# Desarrollo: orígenes adicionales desde ALLOWED_ORIGINS_DEV y frontend_url
+_prod_regex = r"^https://(.*\.+)?adriansaas\.xyz$"
 
 app.add_middleware(
     CORSMiddleware,
-    # allow_origin_regex cubre *.adriansaas.xyz sin wildcard literal
     allow_origin_regex=_prod_regex,
-    # Orígenes concretos para desarrollo local (vacío en producción)
-    allow_origins=settings.dev_origins,
+    allow_origins=settings.dev_origins + [settings.frontend_url.strip("/")],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -72,6 +70,9 @@ app.include_router(auth.router)
 # Fase 2.3 — Tickets (Órdenes de Reparación)
 from app.routers import tickets  # noqa: E402
 app.include_router(tickets.router)
+
+from app.routers import inventory  # noqa: E402
+app.include_router(inventory.router)
 
 # RUTAS PÚBLICAS — El antiguo /track fue reemplazado por /tracking (app/api/v1/)
 

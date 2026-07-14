@@ -13,6 +13,7 @@ TecniDesk cubre todo el ciclo de vida de una reparación: desde el ingreso del e
 | 🏢 **Multi-Tenancy** | Cada taller opera en un subdominio único con total aislamiento de datos por `shop_id` |
 | 🔐 **Seguridad robusta** | JWT (Access + Refresh), cifrado Fernet para PINs, bcrypt para contraseñas, rate limiting por IP |
 | 🎫 **Gestión de Tickets** | Órdenes de reparación completas: diagnóstico, asignación de técnico, estados e ítems de inventario |
+| 📦 **Control de Inventario** | Catálogo CRUD completo con validaciones numéricas estrictas, alertas de stock bajo y actualización optimista |
 | 📸 **Evidencias Fotográficas** | Compresión en el navegador (< 800 KB) antes del upload a Cloudflare R2 |
 | 🔍 **Portal de Rastreo Público** | Timeline interactivo del progreso de la reparación, sin login requerido |
 | 💬 **Negociación por WhatsApp** | Botón contextual unificado en la etapa de presupuestación para facilitar la conversación con el taller |
@@ -321,6 +322,7 @@ npm run dev
 | **Fix PIN en actualizaciones** | Parpadeo "Sin PIN" tras cambios de estado → desencriptado en los tres servicios de actualización antes de retornar |
 | **Whitelabeling** | Portal de rastreo con nombre y logo dinámico del taller → `shop_name` + `shop_logo_url` en `PublicTicketResponse` |
 | **Canal WhatsApp** | Botón ausente en cuentas antiguas → campo `contact_whatsapp` capturado en onboarding; API retorna `null` en vez de string vacío |
+| **Módulo Inventario** | Operatividad total del inventario → CRUD con validación estricta de nombres/stock, Fix de bloqueo CORS en subdominios, y Fix 500 en inyección de `shop_id` |
 
 ---
 

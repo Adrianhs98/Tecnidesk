@@ -25,6 +25,7 @@ playground/
 # Logs y outputs
 *.log
 *.txt
+!requirements.txt
 test_results*.json
 uvicorn*.log
 verification_results*.log

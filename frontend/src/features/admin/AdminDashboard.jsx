@@ -6,6 +6,7 @@ import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
 import NewTicketModal from "./components/NewTicketModal";
 import AdminTicketCard from "./components/AdminTicketCard";
+import InventoryModal from "./components/InventoryModal";
 
 // Estados que NO cuentan como "activos en taller"
 const ESTADOS_INACTIVOS = ["LISTO_PARA_RETIRAR", "NO_APROBADO"];
@@ -21,6 +22,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
   const [exactDate, setExactDate] = useState("");
+  const [showInventory, setShowInventory] = useState(false);
 
   // Ref para acceder al estado actual de tickets dentro de callbacks sin dependencias
   const ticketsRef = useRef(tickets);
@@ -170,7 +172,21 @@ export default function AdminDashboard() {
             <span className="admin-subtitle"> | Panel de Control</span>
           </div>
         </div>
-        <div className="admin-topbar-right">
+        <div className="admin-topbar-right" style={{ display: "flex", gap: 10 }}>
+          <button 
+            className="btn-secondary" 
+            onClick={() => setShowInventory(true)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 6, 
+              padding: "10px 16px",
+              borderColor: "var(--accent)", 
+              color: "var(--accent)" 
+            }}
+          >
+            📦 Inventario
+          </button>
           <button className="btn-new-ticket" onClick={() => setShowModal(true)}>Ingresar Equipo</button>
           <button className="btn-danger" onClick={handleLogout}>Cerrar Sesion</button>
         </div>
@@ -207,24 +223,57 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <input className="form-input" type="text" placeholder="Buscar por nombre, marca o codigo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "11px 16px" }} />
-          <select className="status-select" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} style={{ minWidth: 148, fontSize: 13, padding: "11px 14px" }}>
+        <div className="admin-filters-bar">
+          <input 
+            className="form-input search-input" 
+            type="text" 
+            placeholder="Buscar por nombre, marca o codigo..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            style={{ fontSize: 13, padding: "11px 16px" }} 
+          />
+          <select 
+            className="status-select filter-control" 
+            value={dateFilter} 
+            onChange={(e) => setDateFilter(e.target.value)} 
+            style={{ fontSize: 13, padding: "11px 14px" }}
+          >
             <option value="all">Todos los tiempos</option>
             <option value="today">Hoy</option>
             <option value="yesterday">Ayer</option>
             <option value="week">Esta semana</option>
             <option value="month">Este mes</option>
           </select>
-          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-            <input type="date" className="form-input" value={exactDate} onChange={(e) => setExactDate(e.target.value)} style={{ minWidth: 148, fontSize: 13, padding: "11px 14px", colorScheme: "dark" }} title="Filtrar por dia exacto" />
+          <div className="filter-control" style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <input 
+              type="date" 
+              className="form-input" 
+              value={exactDate} 
+              onChange={(e) => setExactDate(e.target.value)} 
+              style={{ width: "100%", fontSize: 13, padding: "11px 14px", colorScheme: "dark" }} 
+              title="Filtrar por dia exacto" 
+            />
           </div>
-          {exactDate && (
-            <button className="btn-secondary" onClick={() => setExactDate("")} style={{ fontSize: 12, padding: "11px 10px", whiteSpace: "nowrap" }} title="Limpiar fecha exacta">
-              Limpiar fecha
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            {exactDate && (
+              <button 
+                className="btn-secondary" 
+                onClick={() => setExactDate("")} 
+                style={{ fontSize: 12, padding: "11px 10px", whiteSpace: "nowrap" }} 
+                title="Limpiar fecha exacta"
+              >
+                Limpiar fecha
+              </button>
+            )}
+            <button 
+              className="btn-secondary" 
+              onClick={fetchData} 
+              disabled={loading}
+              style={{ fontSize: 12, padding: "11px 16px" }}
+            >
+              Actualizar
             </button>
-          )}
-          <button className="btn-secondary" onClick={fetchData} disabled={loading}>Actualizar</button>
+          </div>
         </div>
 
         {hasActiveFilters && (
@@ -331,6 +380,7 @@ export default function AdminDashboard() {
       </div>
 
       {showModal && <NewTicketModal onClose={() => setShowModal(false)} onCreated={handleTicketCreated} />}
+      {showInventory && <InventoryModal onClose={() => setShowInventory(false)} />}
       {createdTicket && <TicketSuccessModal ticket={createdTicket} onClose={() => setCreatedTicket(null)} />}
     </div>
   );

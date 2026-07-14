@@ -1193,3 +1193,35 @@ select:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ===== ADMIN FILTERS BAR ===== */
+.admin-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
+}
+
+.admin-filters-bar .search-input {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.admin-filters-bar .filter-control {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 150px;
+}
+
+@media (max-width: 768px) {
+  .admin-filters-bar {
+    flex-wrap: wrap;
+  }
+  .admin-filters-bar .search-input,
+  .admin-filters-bar .filter-control {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+

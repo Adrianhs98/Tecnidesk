@@ -29,6 +29,15 @@ class Inventory(UUIDMixin, TimestampMixin, Base):
     # Alerta de stock bajo (Regla de negocio: si stock <= low_stock_alert → notificar)
     low_stock_alert: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
+    # Soft delete (evita romper histórico de tickets al borrar)
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False, server_default="true", default=True
+    )
+
+    @property
+    def is_low_stock(self) -> bool:
+        return self.stock_quantity <= self.low_stock_alert
+
     # Relaciones
     shop: Mapped["Shop"] = relationship("Shop", back_populates="inventory")  # noqa: F821
     ticket_items: Mapped[list["TicketItem"]] = relationship(  # noqa: F821

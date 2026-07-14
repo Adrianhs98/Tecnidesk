@@ -18,6 +18,8 @@ import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
 import { STATUS_CONFIG, ADMIN_STATUSES } from "../../../utils/constants";
 import { formatDate } from "../../../utils/date";
+import PartsSelector from "./PartsSelector";
+import DiagnosticModal from "./DiagnosticModal";
 
 export default function AdminTicketCard({ ticket, onStatusChange }) {
   const cfg = STATUS_CONFIG[ticket.status] || { label: ticket.status, color: "var(--accent)", icon: "📋" };
@@ -29,13 +31,11 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
-  // Diagnóstico y presupuesto
-  const [showDiagForm, setShowDiagForm] = useState(false);
-  const [diagNotes, setDiagNotes] = useState(ticket.diagnostic_notes || "");
-  const [diagCost, setDiagCost] = useState(ticket.total_cost || "");
-  const [diagSaving, setDiagSaving] = useState(false);
-  const [diagError, setDiagError] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [showDiagModal, setShowDiagModal] = useState(false);
+
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +56,27 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     return () => { mounted = false; };
   }, [ticket.id]);
 
+  useEffect(() => {
+    if (!showDetail) return;
+    let mounted = true;
+    const fetchTicketDetails = async () => {
+      setLoadingItems(true);
+      try {
+        const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`);
+        if (res.ok && mounted) {
+          const data = await res.json();
+          setItems(data.items || []);
+        }
+      } catch (err) {
+        console.error("Error fetching ticket details:", err);
+      } finally {
+        if (mounted) setLoadingItems(false);
+      }
+    };
+    fetchTicketDetails();
+    return () => { mounted = false; };
+  }, [ticket.id, showDetail]);
+
   const handleUploadEvidence = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -75,7 +96,6 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
       formData.append("file", compressedFile, compressedFile.name || "evidence.jpg");
 
       const token = sessionStorage.getItem("td_token");
-      // Nota: No usamos authFetch aquí porque necesitamos que el navegador setee el boundary del multipart
       const res = await fetch(`${API_BASE}/tickets/${ticket.id}/evidences`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
@@ -111,40 +131,33 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
       const updated = await res.json();
       onStatusChange(updated);
     } catch {
-      setSelectedStatus(ticket.status); // revert on error
+      setSelectedStatus(ticket.status);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSendDiagnostic = async () => {
-    if (!diagNotes.trim() || diagNotes.trim().length < 5) {
-      setDiagError("El diagnóstico debe tener al menos 5 caracteres.");
-      return;
-    }
-    if (!diagCost || parseFloat(diagCost) < 0) {
-      setDiagError("Ingresa un costo válido.");
-      return;
-    }
-    setDiagSaving(true);
-    setDiagError(null);
+  const handleItemsUpdated = async () => {
     try {
-      const res = await authFetch(`${API_BASE}/tickets/${ticket.id}/diagnostic`, {
-        method: "PATCH",
-        body: JSON.stringify({ diagnostic_notes: diagNotes.trim(), total_cost: parseFloat(diagCost) }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Error ${res.status}`);
+      const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`);
+      if (res.ok) {
+        const updated = await res.json();
+        setItems(updated.items || []);
+        onStatusChange(updated);
       }
-      const updated = await res.json();
-      onStatusChange(updated);
-      setShowDiagForm(false);
     } catch (err) {
-      setDiagError(err.message || "Error al enviar diagnóstico.");
-    } finally {
-      setDiagSaving(false);
+      console.error("Error refreshing ticket on items update:", err);
     }
+  };
+
+  const handleDiagnosticSuccess = (updatedTicket) => {
+    setShowDiagModal(false);
+    onStatusChange(updatedTicket);
+    // Refresh items
+    authFetch(`${API_BASE}/tickets/${ticket.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setItems(data.items || []); })
+      .catch(() => {});
   };
 
   const rawPhone = ticket.customer?.phone_number || ticket._frontendPhone || "";
@@ -156,19 +169,23 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
 
   useEffect(() => {
     if (!showDetail) return;
-    
     document.body.style.overflow = "hidden";
-    
     const handleKeyDown = (e) => {
       if (e.key === "Escape") closeDetail();
     };
-    
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = "unset";
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [showDetail, closeDetail]);
+
+  // Ensure overflow is always cleaned up if modal unmounts
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   return (
     <>
@@ -295,6 +312,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
 
     </div>
 
+    {/* DETAIL MODAL */}
     {showDetail && (
       <div 
         style={{ position:"fixed", inset:0, zIndex:1000, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
@@ -354,27 +372,78 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
               </div>
             </div>
 
-            {/* Section: Diagnóstico */}
-            {(ticket.status === "EN_REVISION" || ticket.status === "ESPERANDO_APROBACION") && (
-              <div>
-                <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)", marginBottom:10 }}>Diagnóstico y Presupuesto</div>
-                {!showDiagForm && ticket.status === "EN_REVISION" && (
-                  <button onClick={() => setShowDiagForm(true)} style={{ background:"rgba(201,167,106,0.10)", border:"1px solid rgba(201,167,106,0.22)", borderRadius:8, padding:"9px 16px", color:"var(--accent)", fontSize:13, fontWeight:600, cursor:"pointer", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                    <ClipboardList size={16} /> Enviar diagnóstico
-                  </button>
-                )}
-                {(showDiagForm || ticket.status === "ESPERANDO_APROBACION") && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {diagError && <div style={{ fontSize:11, color:"var(--danger)", display:"flex", alignItems:"center", gap:4 }}><AlertTriangle size={12} /> {diagError}</div>}
-                    <textarea className="form-textarea" placeholder="Describe el diagnóstico y las piezas a reemplazar..." value={diagNotes} onChange={(e) => { setDiagNotes(e.target.value); setDiagError(null); }} style={{ minHeight:80, fontSize:13 }} />
-                    <input className="form-input" type="number" step="0.01" min="0" placeholder="Costo total (ej. 45.00)" value={diagCost} onChange={(e) => { setDiagCost(e.target.value); setDiagError(null); }} style={{ fontSize:13 }} />
-                    <button className="btn-primary" onClick={handleSendDiagnostic} disabled={diagSaving || !diagNotes.trim() || !diagCost} style={{ padding:"10px 16px", fontSize:13 }}>
-                      {diagSaving ? "Enviando…" : "Enviar presupuesto al cliente ✓"}
-                    </button>
-                  </div>
-                )}
+            {/* Section: Diagnóstico y Presupuesto */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text3)", marginBottom: 10 }}>
+                Diagnóstico y Presupuesto
               </div>
-            )}
+
+              {/* Botón "Escribir diagnóstico" — solo EN_REVISION y sin diagnóstico previo */}
+              {ticket.status === "EN_REVISION" && (
+                <button 
+                  onClick={() => setShowDiagModal(true)} 
+                  style={{ 
+                    background: "rgba(201,167,106,0.10)", 
+                    border: "1px solid rgba(201,167,106,0.22)", 
+                    borderRadius: 8, 
+                    padding: "9px 16px", 
+                    color: "var(--accent)", 
+                    fontSize: 13, 
+                    fontWeight: 600, 
+                    cursor: "pointer", 
+                    width: "100%", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <ClipboardList size={16} /> 
+                  {ticket.diagnostic_notes ? "Actualizar diagnóstico" : "Escribir diagnóstico"}
+                </button>
+              )}
+
+              {/* Diagnóstico existente */}
+              {ticket.diagnostic_notes && (
+                <div style={{ fontSize: 13, color: "var(--text2)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "10px 12px", marginBottom: 12 }}>
+                  <span style={{ fontWeight: 600, display: "block", fontSize: 11, color: "var(--text3)", textTransform: "uppercase", marginBottom: 4 }}>
+                    Diagnóstico:
+                  </span>
+                  {ticket.diagnostic_notes}
+                </div>
+              )}
+
+              {/* Repuestos — editable si EN_REPARACION / ESPERANDO_REPUESTO, read-only si otros */}
+              {loadingItems ? (
+                <div style={{ fontSize: 12, color: "var(--text3)" }}>Cargando...</div>
+              ) : (
+                <PartsSelector
+                  ticketId={ticket.id}
+                  items={items}
+                  setItems={setItems}
+                  status={ticket.status}
+                  onItemsUpdated={handleItemsUpdated}
+                />
+              )}
+
+              {/* Costo total */}
+              <div style={{ 
+                padding: 12, 
+                background: "rgba(255,255,255,0.02)", 
+                border: "1px solid var(--border)", 
+                borderRadius: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: 12,
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)" }}>Costo Total:</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "var(--success)", fontFamily: "monospace" }}>
+                  ${parseFloat(ticket.total_cost || 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
 
             {/* Section: Evidencias */}
             <div>
@@ -405,6 +474,16 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
           </div>
         </div>
       </div>
+    )}
+
+    {/* DIAGNOSTIC MODAL — separate from detail modal to avoid nesting issues */}
+    {showDiagModal && (
+      <DiagnosticModal
+        ticketId={ticket.id}
+        ticket={ticket}
+        onClose={() => setShowDiagModal(false)}
+        onSuccess={handleDiagnosticSuccess}
+      />
     )}
     </>
   );

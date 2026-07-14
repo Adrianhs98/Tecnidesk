@@ -65,7 +65,6 @@ class TicketItemResponse(BaseModel):
     description: str
     quantity: int
     unit_price: Decimal
-    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -139,7 +138,7 @@ class TicketStatusUpdateIn(BaseModel):
 class TicketDiagnosticUpdate(BaseModel):
     """Payload para enviar diagnóstico y presupuesto al cliente."""
     diagnostic_notes: str = Field(..., min_length=5)
-    total_cost: float = Field(..., ge=0)
+    labor_cost: float = Field(..., ge=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

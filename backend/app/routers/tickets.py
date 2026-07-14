@@ -211,6 +211,31 @@ async def add_ticket_item(
         ) from e
 
 
+@router.delete(
+    "/{ticket_id}/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar Ítem del Ticket",
+    description="Elimina un repuesto o mano de obra, restaura el stock y recalcula el costo total.",
+)
+async def remove_ticket_item(
+    ticket_id: uuid.UUID,
+    item_id: uuid.UUID,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await ticket_service.remove_ticket_item(
+            db=db,
+            ticket_id=ticket_id,
+            shop_id=current_user.shop_id,
+            item_id=item_id,
+        )
+    except TicketNotFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from e
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 6. PATCH /tickets/{ticket_id}/assign
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -368,7 +393,7 @@ async def list_evidences(
     "/{ticket_id}/diagnostic",
     response_model=TicketResponse,
     summary="Enviar diagnóstico y presupuesto",
-    description="Actualiza diagnostic_notes, total_cost y cambia automáticamente el status a ESPERANDO_APROBACION.",
+    description="Actualiza diagnostic_notes, labor_cost y cambia automáticamente el status a ESPERANDO_APROBACION.",
 )
 async def update_diagnostic(
     ticket_id: uuid.UUID,
@@ -382,7 +407,7 @@ async def update_diagnostic(
             ticket_id=ticket_id,
             shop_id=current_user.shop_id,
             diagnostic_notes=payload.diagnostic_notes,
-            total_cost=payload.total_cost,
+            labor_cost=payload.labor_cost,
         )
     except TicketNotFound as e:
         raise HTTPException(
