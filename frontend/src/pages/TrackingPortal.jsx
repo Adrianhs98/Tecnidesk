@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import LogoBadge from "../components/shared/LogoBadge";
 import SkeletonCard from "../components/shared/SkeletonCard";
 import Stepper from "../components/shared/Stepper";
+import ThemeToggle from "../components/shared/ThemeToggle";
 import { API_BASE } from "../api/config";
 import { STATUS_CONFIG } from "../utils/constants";
 import { formatDate } from "../utils/date";
@@ -80,7 +81,10 @@ export default function TrackingPortal() {
 
   return (
     <div className="portal">
-      <div className="header" style={{ paddingBottom: 16 }}>
+      <div className="header" style={{ paddingBottom: 16, position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, right: 0 }}>
+          <ThemeToggle />
+        </div>
         <LogoBadge 
           businessName={data?.shop_name} 
           logoUrl={data?.shop_logo_url} 
@@ -140,14 +144,14 @@ export default function TrackingPortal() {
                 <button
                   onClick={handleApprove}
                   disabled={approving || rejecting}
-                  style={{ flex: 1, minWidth: 140, padding: "12px 20px", borderRadius: 12, border: "none", background: "var(--success)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: approving ? "not-allowed" : "pointer", opacity: approving ? 0.6 : 1, transition: "all 0.2s" }}
+                  style={{ flex: 1, minWidth: 140, padding: "12px 20px", borderRadius: 12, border: "none", background: "var(--success)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: approving ? "not-allowed" : "pointer", opacity: approving ? 0.6 : 1, transition: "opacity 0.2s, background-color 0.2s" }}
                 >
                   {approving ? "Procesando..." : "Aceptar presupuesto"}
                 </button>
                 <button
                   onClick={handleReject}
                   disabled={approving || rejecting}
-                  style={{ flex: 1, minWidth: 140, padding: "12px 20px", borderRadius: 12, background: "transparent", border: "1px solid rgba(157,92,82,0.30)", color: "var(--danger)", fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: rejecting ? "not-allowed" : "pointer", opacity: rejecting ? 0.6 : 1, transition: "all 0.2s" }}
+                  style={{ flex: 1, minWidth: 140, padding: "12px 20px", borderRadius: 12, background: "transparent", border: "1px solid rgba(157,92,82,0.30)", color: "var(--danger)", fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, cursor: rejecting ? "not-allowed" : "pointer", opacity: rejecting ? 0.6 : 1, transition: "opacity 0.2s, background-color 0.2s" }}
                 >
                   {rejecting ? "Procesando..." : "No aceptar"}
                 </button>
@@ -162,7 +166,7 @@ export default function TrackingPortal() {
                     href={`https://wa.me/${data.contact_whatsapp}?text=${encodeURIComponent(`Hola, sobre mi equipo ${data.device_brand} ${data.device_model} (código: ${data.tracking_token || token}). Quisiera conversar sobre el presupuesto estimado de $${data.total_cost}.`)}`}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 20px", borderRadius: 12, background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)", color: "var(--whatsapp)", textDecoration: "none", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, transition: "all 0.2s" }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 20px", borderRadius: 12, background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.25)", color: "var(--whatsapp)", textDecoration: "none", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, transition: "background-color 0.2s, transform 0.2s" }}
                   >
                     <MessageCircle size={14} /> Contactar al Taller
                   </a>

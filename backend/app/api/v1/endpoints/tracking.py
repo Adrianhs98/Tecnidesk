@@ -1,16 +1,28 @@
+import re
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.ticket import PublicTicketResponse
+from app.schemas.ticket import PublicTicketResponse, RejectTicketRequest
 from app.services import ticket_service
 from app.services.email_service import send_approval_email
 
 router = APIRouter()
 
 
+
+def _sanitize_phone(phone_str: str | None) -> str | None:
+    """Elimina caracteres no numéricos dejando únicamente los dígitos."""
+    if not phone_str:
+        return None
+    cleaned = re.sub(r"\D", "", phone_str)
+    return cleaned if cleaned else None
+
+
 def _enrich_response(ticket) -> dict:
     """Construye la respuesta pública incluyendo contact_whatsapp del shop."""
+    raw_whatsapp = (getattr(ticket.shop, "contact_whatsapp", None) or None) if ticket.shop else None
     data = {
         "device_brand": ticket.device_brand,
         "device_model": ticket.device_model,
@@ -20,7 +32,7 @@ def _enrich_response(ticket) -> dict:
         "total_cost": ticket.total_cost,
         "requires_approval": ticket.requires_approval,
         "tracking_token": ticket.tracking_token,
-        "contact_whatsapp": (getattr(ticket.shop, "contact_whatsapp", None) or None) if ticket.shop else None,
+        "contact_whatsapp": _sanitize_phone(raw_whatsapp),
         "evidences": getattr(ticket, "evidences", []) or [],
         "created_at": ticket.created_at,
         "updated_at": ticket.updated_at,
@@ -32,14 +44,14 @@ def _enrich_response(ticket) -> dict:
 
 @router.get("/{tracking_token}", response_model=PublicTicketResponse)
 async def get_public_ticket(
-    tracking_token: str,
+    tracking_token: UUID,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Obtiene la información pública de un ticket de reparación usando el tracking_token.
     Este endpoint no requiere autenticación y es usado por los clientes finales.
     """
-    ticket = await ticket_service.get_ticket_by_tracking_token(db, tracking_token)
+    ticket = await ticket_service.get_ticket_by_tracking_token(db, str(tracking_token))
     
     if not ticket:
         raise HTTPException(
@@ -52,14 +64,14 @@ async def get_public_ticket(
 
 @router.post("/{tracking_token}/approve", response_model=PublicTicketResponse)
 async def approve_ticket(
-    tracking_token: str,
+    tracking_token: UUID,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Aprueba el presupuesto de un ticket (público, sin JWT).
     Cambia el status de ESPERANDO_APROBACION a EN_REPARACION.
     """
-    ticket = await ticket_service.approve_ticket_by_token(db, tracking_token)
+    ticket = await ticket_service.approve_ticket_by_token(db, str(tracking_token))
 
     if not ticket:
         raise HTTPException(
@@ -83,14 +95,20 @@ async def approve_ticket(
 
 @router.post("/{tracking_token}/reject", response_model=PublicTicketResponse)
 async def reject_ticket(
-    tracking_token: str,
+    tracking_token: UUID,
+    payload: RejectTicketRequest = RejectTicketRequest(),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Rechaza el presupuesto de un ticket (público, sin JWT).
     Cambia el status de ESPERANDO_APROBACION a NO_APROBADO.
+    Acepta un motivo opcional en el cuerpo de la petición.
     """
-    ticket = await ticket_service.reject_ticket_by_token(db, tracking_token)
+    ticket = await ticket_service.reject_ticket_by_token(
+        db,
+        str(tracking_token),
+        rejection_reason=payload.rejection_reason
+    )
 
     if not ticket:
         raise HTTPException(

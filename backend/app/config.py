@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Base de datos
     db_url: str
 
+    # Clave de superadministrador para operaciones de plataforma
+    superadmin_api_key: str = "change-me-superadmin-secret-key"
+
     # JWT — HS256, mínimo 64 caracteres
     jwt_secret: str
     jwt_refresh_secret: str

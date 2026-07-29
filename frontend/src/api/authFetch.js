@@ -9,7 +9,7 @@ export async function authFetch(url, options = {}) {
     },
   });
   if (res.status === 401) {
-    sessionStorage.clear();
+    window.dispatchEvent(new Event("auth:logout"));
     window.location.replace("/login");
   }
   return res;

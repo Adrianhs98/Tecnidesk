@@ -11,7 +11,7 @@ import time
 import uuid
 import magic
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ from app.services.storage_service import upload_evidence_image
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from app.models.subscription import Subscription, SubscriptionStatusEnum
-from app.core.dependencies import subscription_guard, get_current_user
+from app.core.dependencies import subscription_guard, get_current_user, superadmin_key_guard
 from app.database import get_db
 from app.models.ticket import TicketStatusEnum
 from app.models.user import User
@@ -63,18 +63,30 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 )
 async def create_ticket(
     data: TicketCreate,
+    response: Response,
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await ticket_service.create_ticket(
+        ticket, warning = await ticket_service.create_ticket(
             db=db,
             shop_id=current_user.shop_id,
             data=data,
         )
+        if warning:
+            response.headers["X-Assignment-Warning"] = warning
+        return ticket
     except CustomerNotInShop as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from e
+    except TechnicianNotInShop as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+    except InvalidTechnicianRole as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
         ) from e
 
 
@@ -82,26 +94,33 @@ async def create_ticket(
 # 2. GET /tickets
 # ═══════════════════════════════════════════════════════════════════════════════
 
+from app.schemas.pagination import PaginatedResponse
+
 @router.get(
     "",
-    response_model=list[TicketListResponse],
+    response_model=PaginatedResponse[TicketListResponse],
     summary="Listar Tickets",
-    description="Obtiene los últimos tickets del taller, con filtrado opcional por estado.",
+    description="Obtiene los últimos tickets del taller, con filtrado opcional.",
 )
 async def list_tickets(
-    ticket_status: TicketStatusEnum | None = Query(
-        None, description="Filtra por estado exacto (ej. Recibido)"
-    ),
+    ticket_status: TicketStatusEnum | None = Query(None, description="Filtra por estado exacto (ej. Recibido)"),
+    search: str | None = Query(None, description="Término de búsqueda general"),
+    date_range: str | None = Query(None, description="Filtra por fecha, ej. 2026-01-01,2026-01-31"),
+    skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200, description="Cantidad máxima a retornar (cap: 200)"),
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
 ):
-    return await ticket_service.list_tickets(
+    items, total = await ticket_service.list_tickets(
         db=db,
         shop_id=current_user.shop_id,
-        status=ticket_status,
+        skip=skip,
         limit=limit,
+        status=ticket_status,
+        search=search,
+        date_range=date_range
     )
+    return PaginatedResponse(items=items, total=total)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -429,7 +448,7 @@ class ActivateShopIn(BaseModel):
 )
 async def activate_shop(
     payload: ActivateShopIn,
-    current_user: User = Depends(get_current_user),
+    _: str = Depends(superadmin_key_guard),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Subscription).where(Subscription.shop_id == payload.shop_id).order_by(Subscription.started_at.desc())

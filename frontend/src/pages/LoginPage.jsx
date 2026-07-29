@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../api/config";
+import ThemeToggle from "../components/shared/ThemeToggle";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -34,6 +35,9 @@ export default function LoginPage() {
 
       const data = await res.json();
       sessionStorage.setItem("td_token", data.access_token);
+      if (data.shop_name) {
+        sessionStorage.setItem("td_shop", data.shop_name);
+      }
       navigate("/admin");
     } catch {
       setError("Credenciales incorrectas o servidor inactivo.");
@@ -43,7 +47,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-portal">
+    <div className="login-portal" style={{ position: "relative" }}>
+      <div style={{ position: "absolute", top: 16, right: 16 }}>
+        <ThemeToggle />
+      </div>
       <div className="login-card">
         <div className="login-card-header">
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--surface2)", border: "1px solid var(--border2)", borderRadius: 999, padding: "5px 14px 5px 9px" }}>

@@ -18,7 +18,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -134,7 +134,7 @@ async def create_ticket(
     db: AsyncSession,
     shop_id: uuid.UUID,
     data: "TicketCreate",  # noqa: F821 — schema definido en app/schemas/
-) -> Ticket:
+) -> tuple[Ticket, str | None]:
     """
     Crea una nueva orden de reparación.
 
@@ -181,6 +181,27 @@ async def create_ticket(
     # ── 3. tracking_token generado aquí (y también como default en el modelo) ─
     tracking_token = str(uuid.uuid4())
 
+    # ── NUEVO: Resolver técnico según modo de asignación ──
+    resolved_tech_id = None
+    assignment_warning = None
+
+    if getattr(data, "assignment_mode", "unassigned") == "manual":
+        from app.services.technician_service import get_technician_by_id
+        tech = await get_technician_by_id(db, data.technician_id, shop_id)
+        if tech is None:
+            raise TechnicianNotInShop(f"Técnico {data.technician_id} no encontrado en el taller.")
+        if not tech.is_active:
+            raise InvalidTechnicianRole("El técnico seleccionado está inactivo.")
+        resolved_tech_id = tech.id
+
+    elif getattr(data, "assignment_mode", "unassigned") == "random":
+        from app.services.technician_service import pick_least_loaded_technician
+        tech = await pick_least_loaded_technician(db, shop_id)
+        if tech:
+            resolved_tech_id = tech.id
+        else:
+            assignment_warning = "No hay técnicos activos; ticket creado sin asignación."
+
     # ── 4. Crear y persistir el Ticket ───────────────────────────────────────
     ticket = Ticket(
         shop_id=shop_id,
@@ -194,6 +215,7 @@ async def create_ticket(
         pin_or_password=encrypted_pin,              # Fernet ciphertext
         status=TicketStatusEnum.EN_ESPERA_INGRESO,
         tracking_token=tracking_token,
+        technician_id=resolved_tech_id,
     )
     db.add(ticket)
 
@@ -228,8 +250,7 @@ async def create_ticket(
             )
 
     ticket.customer = customer
-    ticket.device_password = getattr(data, "pin_or_password", None)  # type: ignore[attr-defined]
-    return _clear_pin(ticket)
+    return _clear_pin(ticket), assignment_warning
 
 
 async def get_ticket_by_id(
@@ -253,7 +274,7 @@ async def get_ticket_by_id(
         ticket_id,
         shop_id,
         selectinload(Ticket.customer),
-        selectinload(Ticket.assigned_technician),
+        selectinload(Ticket.technician),
         selectinload(Ticket.items),
         selectinload(Ticket.evidences),
     )
@@ -439,6 +460,7 @@ async def approve_ticket_by_token(
 async def reject_ticket_by_token(
     db: AsyncSession,
     token: str,
+    rejection_reason: str | None = None,
 ) -> Ticket | None:
     """
     Rechaza el presupuesto de un ticket usando su tracking_token (público).
@@ -458,6 +480,10 @@ async def reject_ticket_by_token(
 
     ticket.status = TicketStatusEnum.NO_APROBADO
     ticket.requires_approval = False
+
+    if rejection_reason:
+        note_prefix = f"[MOTIVO DE RECHAZO]: {rejection_reason}\n"
+        ticket.internal_notes = note_prefix + (ticket.internal_notes or "")
 
     try:
         await db.commit()
@@ -533,44 +559,69 @@ async def get_ticket_stats(
 async def list_tickets(
     db: AsyncSession,
     shop_id: uuid.UUID,
-    status: TicketStatusEnum | None = None,
+    skip: int = 0,
     limit: int = 50,
-) -> list[Ticket]:
-    """
-    Lista tickets de un taller con filtros opcionales.
-
-    Args:
-        shop_id: UUID del taller (multi-tenant).
-        status:  Filtro por estado (opcional).
-        limit:   Máximo de resultados (cap interno: 200).
-
-    Returns:
-        Lista de Ticket sin pin_or_password expuesto, ordenada created_at DESC.
-    """
-    # Cap de seguridad para evitar paginaciones masivas accidentales
+    status: TicketStatusEnum | None = None,
+    search: str | None = None,
+    date_range: str | None = None
+) -> tuple[list[Ticket], int]:
     limit = min(limit, 200)
 
     stmt = (
         select(Ticket)
+        .join(Customer, Ticket.customer_id == Customer.id)
         .where(Ticket.shop_id == shop_id)
-        .options(selectinload(Ticket.customer))
-        .order_by(Ticket.created_at.desc())
-        .limit(limit)
+        .options(
+            selectinload(Ticket.customer),
+            selectinload(Ticket.technician),
+        )
     )
 
     if status is not None:
         stmt = stmt.where(Ticket.status == status)
+    
+    if search:
+        search_term = f"%{search}%"
+        conditions = [
+            Customer.full_name.ilike(search_term),
+            Ticket.device_brand.ilike(search_term),
+            Ticket.device_model.ilike(search_term)
+        ]
+        try:
+            parsed_id = uuid.UUID(search)
+            conditions.append(Ticket.id == parsed_id)
+        except ValueError:
+            pass
+            
+        stmt = stmt.where(or_(*conditions))
+            
+    if date_range:
+        # Assuming date_range is like 'YYYY-MM-DD,YYYY-MM-DD'
+        parts = date_range.split(',')
+        if len(parts) == 2:
+            from datetime import datetime
+            try:
+                start_date = datetime.strptime(parts[0], '%Y-%m-%d')
+                end_date = datetime.strptime(parts[1], '%Y-%m-%d')
+                stmt = stmt.where(Ticket.created_at >= start_date, Ticket.created_at <= end_date)
+            except ValueError:
+                pass
+
+    total_query = select(func.count()).select_from(stmt.subquery())
+    total_result = await db.execute(total_query)
+    total = total_result.scalar_one_or_none() or 0
+
+    stmt = stmt.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
 
     result = await db.execute(stmt)
     tickets = list(result.scalars().all())
 
-    # Desencriptar PIN + limpiar campo cifrado en todos los resultados
     for t in tickets:
         decrypted = decrypt_pin(t.pin_or_password)
         t.__dict__["device_password"] = decrypted if decrypted else None
         _clear_pin(t)
 
-    return tickets
+    return tickets, total
 
 
 async def update_ticket_status(
@@ -642,29 +693,19 @@ async def assign_technician(
         TechnicianNotInShop: Si el usuario no pertenece al shop.
         InvalidTechnicianRole: Si el usuario no tiene rol permitido.
     """
-    # ── Validar multi-tenant del técnico ──────────────────────────────────────
-    tech_result = await db.execute(
-        select(User).where(
-            User.id == technician_id,
-            User.shop_id == shop_id,
-            User.is_active == True,  # noqa: E712
-        )
-    )
-    technician = tech_result.scalar_one_or_none()
-    if technician is None:
+    # ── Validar en módulo técnicos ──────────────────────────────────────────
+    from app.services.technician_service import get_technician_by_id
+    tech = await get_technician_by_id(db, technician_id, shop_id)
+    if tech is None:
         raise TechnicianNotInShop(
-            f"El usuario {technician_id} no existe o está inactivo en el taller {shop_id}."
+            f"El técnico {technician_id} no existe en el taller {shop_id}."
         )
-
-    # ── Validar que el rol permite asignación ─────────────────────────────────
-    if technician.role not in (UserRoleEnum.admin, UserRoleEnum.technician):
-        raise InvalidTechnicianRole(
-            f"El usuario {technician_id} no tiene rol de técnico ni admin."
-        )
+    if not tech.is_active:
+        raise InvalidTechnicianRole("El técnico seleccionado está inactivo.")
 
     # ── Asignar ───────────────────────────────────────────────────────────────
     ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
-    ticket.assigned_technician_id = technician_id
+    ticket.technician_id = tech.id
 
     try:
         await db.commit()

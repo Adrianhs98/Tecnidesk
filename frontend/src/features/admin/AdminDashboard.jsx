@@ -1,89 +1,141 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Info } from "lucide-react";
+import { useEffect, useState, useCallback, useRef, useMemo, Suspense, lazy, useTransition } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Info, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import TicketSuccessModal from "../../components/shared/TicketSuccessModal";
 import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
-import NewTicketModal from "./components/NewTicketModal";
 import AdminTicketCard from "./components/AdminTicketCard";
-import InventoryModal from "./components/InventoryModal";
+import ThemeToggle from "../../components/shared/ThemeToggle";
+
+const TicketSuccessModal = lazy(() => import("../../components/shared/TicketSuccessModal"));
+const NewTicketModal = lazy(() => import("./components/NewTicketModal"));
+const InventoryModal = lazy(() => import("./components/InventoryModal"));
+const TechniciansModal = lazy(() => import("./components/TechniciansModal"));
 
 // Estados que NO cuentan como "activos en taller"
 const ESTADOS_INACTIVOS = ["LISTO_PARA_RETIRAR", "NO_APROBADO"];
 
+const startOf = (dateValue) => {
+  const result = new Date(dateValue);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const parseLocalDateInput = (value) => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState([]);
-  const [stats, setStats] = useState({ total: 0, activos: 0, listos: 0, espera: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
+
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(15);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+
+  const { data, isLoading: loading, isError, error: queryError, refetch: fetchData } = useQuery({
+    queryKey: ['dashboardData', page, limit, searchQuery, dateFilter],
+    queryFn: async () => {
+      const skip = page * limit;
+      let url = `${API_BASE}/tickets?skip=${skip}&limit=${limit}`;
+      if (searchQuery) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+      if (dateFilter) {
+        url += `&date_range=${encodeURIComponent(dateFilter)}`;
+      }
+      
+      const ticketsRes = await authFetch(url);
+      if (!ticketsRes.ok) {
+        const error = new Error(ticketsRes.statusText || "Error al cargar tickets");
+        error.status = ticketsRes.status;
+        throw error;
+      }
+      const ticketsData = await ticketsRes.json();
+
+      let statsData = { total: 0, activos: 0, listos: 0, espera: 0 };
+      try {
+        const statsRes = await authFetch(`${API_BASE}/tickets/stats`);
+        if (statsRes.ok) {
+          statsData = await statsRes.json();
+        }
+      } catch (err) {
+        console.warn("Las estadísticas fallaron, procediendo de forma controlada:", err);
+      }
+
+      return {
+        tickets: ticketsData.items || [],
+        totalItems: ticketsData.total || 0,
+        stats: statsData,
+      };
+    }
+  });
+
+  const tickets = data?.tickets || [];
+  const totalItems = data?.totalItems || 0;
+  const stats = data?.stats || { total: 0, activos: 0, listos: 0, espera: 0 };
+  
+  let errorMsg = null;
+  if (isError) {
+    if (queryError?.status === 401) {
+      errorMsg = "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.";
+    } else if (queryError?.status === 402) {
+      errorMsg = "Tu suscripción al servicio ha expirado. Contacta a soporte para reactivar tu cuenta.";
+    } else if (queryError?.status === 403) {
+      errorMsg = "No tienes permisos suficientes para acceder a esta área.";
+    } else if (queryError?.status >= 500) {
+      errorMsg = "El servidor experimentó un error interno. Por favor, intenta de nuevo más tarde.";
+    } else {
+      errorMsg = "No se pudo cargar la información. Verifica tu conexión a internet.";
+    }
+  }
+
   const [showModal, setShowModal] = useState(false);
   const [createdTicket, setCreatedTicket] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("all");
+  const [isPending, startTransition] = useTransition();
   const [exactDate, setExactDate] = useState("");
   const [showInventory, setShowInventory] = useState(false);
-
-  // Ref para acceder al estado actual de tickets dentro de callbacks sin dependencias
-  const ticketsRef = useRef(tickets);
-  useEffect(() => { ticketsRef.current = tickets; }, [tickets]);
-
-  // Carga paralela: tickets + stats en un solo viaje de red (zero waterfall)
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [ticketsRes, statsRes] = await Promise.all([
-        authFetch(`${API_BASE}/tickets`),
-        authFetch(`${API_BASE}/tickets/stats`),
-      ]);
-      if (!ticketsRes.ok) throw new Error(`Error ${ticketsRes.status}`);
-      if (!statsRes.ok) throw new Error(`Error stats ${statsRes.status}`);
-
-      const ticketsData = await ticketsRes.json();
-      const statsData = await statsRes.json();
-
-      setTickets(Array.isArray(ticketsData) ? ticketsData : ticketsData.tickets ?? []);
-      setStats(statsData);
-    } catch (err) {
-      setError("No se pudo cargar la lista de equipos. " + (err.message || ""));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const [showTechnicians, setShowTechnicians] = useState(false);
 
   const handleLogout = () => {
-    sessionStorage.clear();
+    window.dispatchEvent(new Event("auth:logout"));
     navigate("/login");
   };
 
   // Optimistic update al CREAR: +1 total, +1 activos, +1 espera (estado inicial)
   const handleTicketCreated = (newTicket) => {
     setShowModal(false);
-    setTickets((prev) => [newTicket, ...prev]);
-    setStats((prev) => ({
-      ...prev,
-      total: prev.total + 1,
-      activos: prev.activos + 1,
-      espera: prev.espera + 1,
-    }));
+    queryClient.setQueryData(['dashboardData'], (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        tickets: [newTicket, ...old.tickets],
+        stats: {
+          ...old.stats,
+          total: old.stats.total + 1,
+          activos: old.stats.activos + 1,
+          espera: old.stats.espera + 1,
+        }
+      };
+    });
     setCreatedTicket(newTicket);
   };
 
   // Optimistic update al CAMBIAR ESTADO: recalcula deltas sin re-fetch
-  const handleStatusChange = (updated) => {
-    const old = ticketsRef.current.find((t) => t.id === updated.id);
+  const handleStatusChange = useCallback((updated) => {
+    queryClient.setQueryData(['dashboardData'], (oldData) => {
+      if (!oldData) return oldData;
 
-    setTickets((prev) =>
-      prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
-    );
+      const oldTicket = oldData.tickets.find((t) => t.id === updated.id);
+      if (!oldTicket) return oldData;
 
-    if (old) {
-      const oldStatus = old.status;
+      const newTickets = oldData.tickets.map((t) => (t.id === updated.id ? { ...t, ...updated } : t));
+
+      const oldStatus = oldTicket.status;
       const newStatus = updated.status;
 
       const deltaActivos =
@@ -96,170 +148,102 @@ export default function AdminDashboard() {
         (newStatus === "EN_ESPERA_INGRESO" ? 1 : 0) -
         (oldStatus === "EN_ESPERA_INGRESO" ? 1 : 0);
 
-      setStats((prev) => ({
-        ...prev,
-        activos: Math.max(0, prev.activos + deltaActivos),
-        listos: Math.max(0, prev.listos + deltaListos),
-        espera: Math.max(0, prev.espera + deltaEspera),
-      }));
-    }
-  };
+      return {
+        ...oldData,
+        tickets: newTickets,
+        stats: {
+          ...oldData.stats,
+          activos: Math.max(0, oldData.stats.activos + deltaActivos),
+          listos: Math.max(0, oldData.stats.listos + deltaListos),
+          espera: Math.max(0, oldData.stats.espera + deltaEspera),
+        }
+      };
+    });
+  }, [queryClient]);
 
-  const startOf = (dateValue) => {
-    const result = new Date(dateValue);
-    result.setHours(0, 0, 0, 0);
-    return result;
-  };
-
-  const parseLocalDateInput = (value) => {
-    if (!value) return null;
-    const [year, month, day] = value.split("-").map(Number);
-    return new Date(year, month - 1, day);
-  };
-
-  const hasActiveFilters = Boolean(searchQuery.trim() || dateFilter !== "all" || exactDate);
-
-  const query = searchQuery.toLowerCase().trim();
-  const now = new Date();
-  const filteredTickets = tickets.filter((t) => {
-    if (query) {
-      const name = (t.customer?.full_name || t._frontendName || t.client_email || "").toLowerCase();
-      const brand = (t.device_brand || "").toLowerCase();
-      const model = (t.device_model || "").toLowerCase();
-      const token = (t.tracking_token || "").toLowerCase();
-      const phone = (t.customer?.phone_number || t._frontendPhone || "").toLowerCase();
-      const email = (t.client_email || t.customer?.email || "").toLowerCase();
-      if (!name.includes(query) && !brand.includes(query) && !model.includes(query) && !token.includes(query) && !phone.includes(query) && !email.includes(query)) return false;
-    }
-
-    if (dateFilter !== "all" && t.created_at) {
-      const created = new Date(t.created_at);
-      if (dateFilter === "today" && created < startOf(now)) return false;
-      if (dateFilter === "yesterday") {
-        const yStart = startOf(now);
-        yStart.setDate(yStart.getDate() - 1);
-        const yEnd = startOf(now);
-        if (created < yStart || created >= yEnd) return false;
-      }
-      if (dateFilter === "week") {
-        const wStart = startOf(now);
-        wStart.setDate(wStart.getDate() - wStart.getDay());
-        if (created < wStart) return false;
-      }
-      if (dateFilter === "month") {
-        const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        if (created < mStart) return false;
-      }
-    }
-
-    if (exactDate && t.created_at) {
-      const created = new Date(t.created_at);
-      const selected = parseLocalDateInput(exactDate);
-      if (created.getFullYear() !== selected.getFullYear() || created.getMonth() !== selected.getMonth() || created.getDate() !== selected.getDate()) return false;
-    }
-
-    return true;
-  });
+  const hasActiveFilters = Boolean(searchQuery.trim() || exactDate);
+  const filteredTickets = tickets;
 
   return (
-    <div className="admin-layout">
-      <div className="admin-topbar">
-        <div className="admin-topbar-left">
-          <img src="/logo.png" alt="Logo del taller" onError={(e) => { e.target.style.display = "none"; }} style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 6, flexShrink: 0 }} />
+    <div className="workbench-layout">
+      <div className="nav-pill">
+        <div className="nav-pill-brand">
+          <img src="/logo.png" alt="Logo" onError={(e) => { e.target.style.display = "none"; }} width={24} height={24} className="workbench-logo" />
           <div className="admin-logo-dot" />
           <div>
             <span className="admin-title">TecniDesk Admin</span>
-            <span className="admin-subtitle"> | Panel de Control</span>
           </div>
         </div>
-        <div className="admin-topbar-right" style={{ display: "flex", gap: 10 }}>
-          <button 
-            className="btn-secondary" 
-            onClick={() => setShowInventory(true)}
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: 6, 
-              padding: "10px 16px",
-              borderColor: "var(--accent)", 
-              color: "var(--accent)" 
-            }}
-          >
+        <div className="nav-pill-actions">
+          <button className="btn-secondary" onClick={() => setShowTechnicians(true)}>
+            <Users size={16} className="inline-icon" /> Técnicos
+          </button>
+          <button className="btn-secondary" onClick={() => setShowInventory(true)}>
             📦 Inventario
           </button>
-          <button className="btn-new-ticket" onClick={() => setShowModal(true)}>Ingresar Equipo</button>
-          <button className="btn-danger" onClick={handleLogout}>Cerrar Sesion</button>
+          <ThemeToggle />
+          <button className="btn-new-ticket" onClick={() => setShowModal(true)}>
+            Ingresar Equipo
+          </button>
+          <button className="btn-danger" onClick={handleLogout}>
+            Cerrar Sesion
+          </button>
         </div>
       </div>
 
-      <div className="admin-body">
+      <div className="workbench-canvas">
         <div className="admin-stats-row">
-          <div className="admin-stat-card" style={{ position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 4, background: "var(--border)" }} />
+          <div className="admin-stat-card">
             <div className="admin-stat-label">Total equipos</div>
             <div className="admin-stat-value accent">{stats.total}</div>
           </div>
-          <div className="admin-stat-card" style={{ position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 4, background: "var(--info)" }} />
+          <div className="admin-stat-card">
             <div className="admin-stat-label">En taller</div>
             <div className="admin-stat-value">{stats.activos}</div>
           </div>
-          <div className="admin-stat-card" style={{ position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 4, background: "var(--success)" }} />
+          <div className="admin-stat-card">
             <div className="admin-stat-label">Listos</div>
             <div className="admin-stat-value success">{stats.listos}</div>
           </div>
-          <div className="admin-stat-card" style={{ position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 4, background: "var(--danger)" }} />
+          <div className="admin-stat-card">
             <div className="admin-stat-label">En espera</div>
             <div className="admin-stat-value warning">{stats.espera}</div>
           </div>
         </div>
 
-        <div className="admin-section-header">
-          <div>
-            <div className="admin-section-title">Equipos en el Taller</div>
-            <div className="admin-section-sub">{loading ? "Cargando..." : `${filteredTickets.length} equipo${filteredTickets.length !== 1 ? "s" : ""} mostrado${filteredTickets.length !== 1 ? "s" : ""}`}</div>
+        <div className="workbench-toolbar">
+          <div className="workbench-toolbar-search">
+            <input 
+              className="form-input search-input" 
+              type="text" 
+              placeholder="Buscar por nombre, marca o codigo..." 
+              value={searchInput} 
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                startTransition(() => setSearchQuery(e.target.value));
+              }} 
+            />
           </div>
-        </div>
+          <div className="workbench-toolbar-filters">
 
-        <div className="admin-filters-bar">
-          <input 
-            className="form-input search-input" 
-            type="text" 
-            placeholder="Buscar por nombre, marca o codigo..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            style={{ fontSize: 13, padding: "11px 16px" }} 
-          />
-          <select 
-            className="status-select filter-control" 
-            value={dateFilter} 
-            onChange={(e) => setDateFilter(e.target.value)} 
-            style={{ fontSize: 13, padding: "11px 14px" }}
-          >
-            <option value="all">Todos los tiempos</option>
-            <option value="today">Hoy</option>
-            <option value="yesterday">Ayer</option>
-            <option value="week">Esta semana</option>
-            <option value="month">Este mes</option>
-          </select>
-          <div className="filter-control" style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <input 
               type="date" 
               className="form-input" 
               value={exactDate} 
-              onChange={(e) => setExactDate(e.target.value)} 
-              style={{ width: "100%", fontSize: 13, padding: "11px 14px", colorScheme: "dark" }} 
+              onChange={(e) => {
+                const val = e.target.value;
+                startTransition(() => {
+                  setExactDate(val);
+                  setDateFilter(val ? `${val},${val}` : "");
+                  setPage(0);
+                });
+              }} 
               title="Filtrar por dia exacto" 
             />
-          </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             {exactDate && (
               <button 
                 className="btn-secondary" 
-                onClick={() => setExactDate("")} 
-                style={{ fontSize: 12, padding: "11px 10px", whiteSpace: "nowrap" }} 
+                onClick={() => startTransition(() => setExactDate(""))} 
                 title="Limpiar fecha exacta"
               >
                 Limpiar fecha
@@ -269,7 +253,6 @@ export default function AdminDashboard() {
               className="btn-secondary" 
               onClick={fetchData} 
               disabled={loading}
-              style={{ fontSize: 12, padding: "11px 16px" }}
             >
               Actualizar
             </button>
@@ -277,93 +260,79 @@ export default function AdminDashboard() {
         </div>
 
         {hasActiveFilters && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-              marginBottom: 16,
-              padding: "12px 14px",
-              background: "rgba(201,167,106,0.08)",
-              border: "1px solid rgba(201,167,106,0.18)",
-              borderRadius: 12,
-              color: "var(--text2)",
-              fontSize: 12,
-            }}
-          >
-            <span style={{ fontWeight: 600, color: "var(--accent)" }}>Filtros activos</span>
+          <div className="workbench-active-filters">
+            <span className="workbench-active-filters-title">Filtros activos</span>
             {searchQuery.trim() && (
-              <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <span className="workbench-filter-pill">
                 Busqueda: {searchQuery.trim()}
               </span>
             )}
-            {dateFilter !== "all" && (
-              <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-                Rango: {dateFilter}
-              </span>
-            )}
             {exactDate && (
-              <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <span className="workbench-filter-pill">
                 Fecha: {exactDate}
               </span>
             )}
             <button
-              className="btn-secondary"
+              className="btn-secondary workbench-clear-btn"
               onClick={() => {
-                setSearchQuery("");
-                setDateFilter("all");
-                setExactDate("");
+                setSearchInput("");
+                startTransition(() => {
+                  setSearchQuery("");
+                  setDateFilter("");
+                  setExactDate("");
+                  setPage(0);
+                });
               }}
-              style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12 }}
             >
               Limpiar filtros
             </button>
           </div>
         )}
 
-        {error && (
+        {errorMsg && (
           <div className="admin-error-bar">
-            <span>ERROR</span> {error}
+            <span>ERROR</span> {errorMsg}
             <button className="btn-secondary" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12 }} onClick={fetchData}>
               Reintentar
             </button>
           </div>
         )}
 
-        {loading && (
+        {loading && !errorMsg && (
           <div className="admin-loading">
             <div className="spinner" />
             Cargando equipos...
           </div>
         )}
 
-        {!loading && !error && tickets.length === 0 && (
+        {!loading && !errorMsg && tickets.length === 0 && (
           <div className="admin-empty">
             <div className="admin-empty-icon"><Info size={40} color="var(--accent)" /></div>
             <div className="admin-empty-title">No hay equipos registrados aun</div>
-            <div className="admin-empty-sub" style={{ marginBottom: 20 }}>Ingresa el primer equipo para comenzar a gestionar tu taller.</div>
-            <button className="btn-new-ticket" onClick={() => setShowModal(true)} style={{ width: "auto", margin: "0 auto" }}>
+            <div className="admin-empty-sub">Ingresa el primer equipo para comenzar a gestionar tu taller.</div>
+            <button className="btn-new-ticket" onClick={() => setShowModal(true)}>
               Ingresar primer equipo
             </button>
           </div>
         )}
 
-        {!loading && !error && tickets.length > 0 && filteredTickets.length === 0 && (
+        {!loading && !errorMsg && tickets.length > 0 && filteredTickets.length === 0 && (
           <div className="admin-empty">
             <div className="admin-empty-icon"><Info size={40} color="var(--accent)" /></div>
             <div className="admin-empty-title">No se encontraron equipos</div>
-            <div className="admin-empty-sub" style={{ marginBottom: 20 }}>
+            <div className="admin-empty-sub">
               Ajusta la busqueda o limpia los filtros para volver a ver resultados.
             </div>
             <button
               className="btn-secondary"
               onClick={() => {
-                setSearchQuery("");
-                setDateFilter("all");
-                setExactDate("");
+                setSearchInput("");
+                startTransition(() => {
+                  setSearchQuery("");
+                  setDateFilter("all");
+                  setExactDate("");
+                });
               }}
-              style={{ width: "auto", margin: "0 auto" }}
             >
               Limpiar filtros
             </button>
@@ -371,17 +340,41 @@ export default function AdminDashboard() {
         )}
 
         {!loading && filteredTickets.length > 0 && (
-          <div className="tickets-grid">
-            {filteredTickets.map((ticket) => (
-              <AdminTicketCard key={ticket.id} ticket={ticket} onStatusChange={handleStatusChange} />
-            ))}
+          <div className="workbench-content">
+            <div className="tickets-grid">
+              {filteredTickets.map((ticket) => (
+                <AdminTicketCard key={ticket.id} ticket={ticket} onStatusChange={handleStatusChange} />
+              ))}
+            </div>
+            <div className="workbench-pagination">
+              <button 
+                className="btn-secondary" 
+                disabled={page === 0} 
+                onClick={() => setPage(p => p - 1)}
+              >
+                Anterior
+              </button>
+              <span className="workbench-pagination-text">
+                Página {page + 1} de {Math.ceil(totalItems / limit)} ({totalItems} totales)
+              </span>
+              <button 
+                className="btn-secondary" 
+                disabled={(page + 1) * limit >= totalItems} 
+                onClick={() => setPage(p => p + 1)}
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {showModal && <NewTicketModal onClose={() => setShowModal(false)} onCreated={handleTicketCreated} />}
-      {showInventory && <InventoryModal onClose={() => setShowInventory(false)} />}
-      {createdTicket && <TicketSuccessModal ticket={createdTicket} onClose={() => setCreatedTicket(null)} />}
+      <Suspense fallback={<div className="modal-overlay"><div className="spinner" /></div>}>
+        {showModal && <NewTicketModal onClose={() => setShowModal(false)} onCreated={handleTicketCreated} />}
+        {showInventory && <InventoryModal onClose={() => setShowInventory(false)} />}
+        {showTechnicians && <TechniciansModal onClose={() => setShowTechnicians(false)} />}
+        {createdTicket && <TicketSuccessModal ticket={createdTicket} onClose={() => setCreatedTicket(null)} />}
+      </Suspense>
     </div>
   );
 }

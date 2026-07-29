@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense, lazy } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import imageCompression from "browser-image-compression";
 import { 
   User, 
@@ -12,19 +13,24 @@ import {
   ClipboardList, 
   Camera, 
   MessageCircle, 
-  X 
+  X,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
 import { STATUS_CONFIG, ADMIN_STATUSES } from "../../../utils/constants";
-import { formatDate } from "../../../utils/date";
+import { formatDate, formatOnlyDate } from "../../../utils/date";
+import { maskPhone, maskEmail, maskTrackingCode } from "../../../utils/privacy";
 import PartsSelector from "./PartsSelector";
-import DiagnosticModal from "./DiagnosticModal";
+
+const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
 
 export default function AdminTicketCard({ ticket, onStatusChange }) {
   const cfg = STATUS_CONFIG[ticket.status] || { label: ticket.status, color: "var(--accent)", icon: "📋" };
   const [selectedStatus, setSelectedStatus] = useState(ticket.status);
   const [saving, setSaving] = useState(false);
+  const [showPii, setShowPii] = useState(false);
 
   const [evidences, setEvidences] = useState([]);
   const [loadingEvidences, setLoadingEvidences] = useState(false);
@@ -34,8 +40,38 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
   const [showDetail, setShowDetail] = useState(false);
   const [showDiagModal, setShowDiagModal] = useState(false);
 
-  const [items, setItems] = useState([]);
-  const [loadingItems, setLoadingItems] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: ticketDetails, isLoading: loadingItems } = useQuery({
+    queryKey: ['ticketDetails', ticket.id],
+    queryFn: async () => {
+      const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`);
+      if (!res.ok) throw new Error("Error fetching details");
+      return res.json();
+    },
+    enabled: showDetail,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  
+  const items = ticketDetails?.items || [];
+  const setItems = useCallback((updater) => {
+    queryClient.setQueryData(['ticketDetails', ticket.id], (oldData) => {
+      const currentItems = oldData?.items || [];
+      const newItems = typeof updater === 'function' ? updater(currentItems) : updater;
+      return { ...oldData, items: newItems };
+    });
+  }, [queryClient, ticket.id]);
+
+  const [technicians, setTechnicians] = useState([]);
+
+  useEffect(() => {
+    if (!showDetail) return;
+    let mounted = true;
+    authFetch(`${API_BASE}/technicians`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (mounted) setTechnicians(data); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [showDetail]);
 
   useEffect(() => {
     let mounted = true;
@@ -56,26 +92,6 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     return () => { mounted = false; };
   }, [ticket.id]);
 
-  useEffect(() => {
-    if (!showDetail) return;
-    let mounted = true;
-    const fetchTicketDetails = async () => {
-      setLoadingItems(true);
-      try {
-        const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`);
-        if (res.ok && mounted) {
-          const data = await res.json();
-          setItems(data.items || []);
-        }
-      } catch (err) {
-        console.error("Error fetching ticket details:", err);
-      } finally {
-        if (mounted) setLoadingItems(false);
-      }
-    };
-    fetchTicketDetails();
-    return () => { mounted = false; };
-  }, [ticket.id, showDetail]);
 
   const handleUploadEvidence = async (e) => {
     const file = e.target.files[0];
@@ -142,7 +158,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
       const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`);
       if (res.ok) {
         const updated = await res.json();
-        setItems(updated.items || []);
+        queryClient.setQueryData(['ticketDetails', ticket.id], updated);
         onStatusChange(updated);
       }
     } catch (err) {
@@ -150,14 +166,32 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     }
   };
 
+  const handleAssign = async (e) => {
+    const newTechId = e.target.value;
+    if(!newTechId) return;
+    try {
+      const res = await authFetch(`${API_BASE}/tickets/${ticket.id}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ technician_id: newTechId })
+      });
+      if(res.ok) {
+         const updated = await res.json();
+         onStatusChange(updated);
+      } else {
+         const errData = await res.json().catch(()=>({}));
+         alert(errData.detail || "Error al reasignar técnico");
+      }
+    } catch(err) {
+      alert(err.message);
+    }
+  };
+
   const handleDiagnosticSuccess = (updatedTicket) => {
     setShowDiagModal(false);
     onStatusChange(updatedTicket);
     // Refresh items
-    authFetch(`${API_BASE}/tickets/${ticket.id}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setItems(data.items || []); })
-      .catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['ticketDetails', ticket.id] });
   };
 
   const rawPhone = ticket.customer?.phone_number || ticket._frontendPhone || "";
@@ -200,8 +234,20 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
               {ticket.device_brand}
             </span>
           </div>
-          <div className="ticket-device-brand" style={{ fontFamily:"'Space Grotesk', monospace", color:"var(--accent)" }}>
-            #{ticket.tracking_token?.slice(0,8) || ticket.id}
+          <div className="ticket-device-brand" style={{ fontFamily:"'Space Grotesk', monospace", color:"var(--accent)", display:"flex", alignItems:"center", gap:8, marginTop: 4 }}>
+            <span>#{maskTrackingCode(ticket.tracking_token || String(ticket.id))}</span>
+            <span style={{ color:"var(--text3)", fontSize: 10 }}>•</span>
+            <span style={{ color: ticket.technician ? "var(--text2)" : "var(--warning)", fontSize: 11, display:"flex", alignItems:"center", gap:4, fontFamily: "inherit", letterSpacing: "normal" }}>
+              <Wrench size={12} /> {ticket.technician?.full_name || "Sin técnico"}
+            </span>
+            {!ticket.technician && (
+              <button 
+                onClick={() => setShowDetail(true)}
+                style={{ background: "transparent", border: "1px solid var(--warning)", color: "var(--warning)", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}
+              >
+                Asignar
+              </button>
+            )}
           </div>
         </div>
         <div
@@ -227,12 +273,12 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
           {(ticket.customer?.phone_number || ticket._frontendPhone) && (
             <div className="ticket-meta-row">
               <span className="ticket-meta-icon"><Smartphone size={14} color="var(--text3)" /></span>
-              <span className="ticket-meta-text">{ticket.customer?.phone_number || ticket._frontendPhone}</span>
+              <span className="ticket-meta-text">{maskPhone(ticket.customer?.phone_number || ticket._frontendPhone)}</span>
             </div>
           )}
           <div className="ticket-meta-row">
             <span className="ticket-meta-icon"><Mail size={14} color="var(--text3)" /></span>
-            <span className="ticket-meta-text">{ticket.client_email || ticket.customer?.email || "—"}</span>
+            <span className="ticket-meta-text">{maskEmail(ticket.client_email || ticket.customer?.email || "—")}</span>
           </div>
         </div>
 
@@ -247,7 +293,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
           )}
           <div className="ticket-meta-row">
             <span className="ticket-meta-icon"><Calendar size={14} color="var(--text3)" /></span>
-            <span className="ticket-meta-text">Ingreso: {formatDate(ticket.created_at)}</span>
+            <span className="ticket-meta-text">Ingreso: {formatOnlyDate(ticket.created_at)}</span>
           </div>
         </div>
 
@@ -342,13 +388,24 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
 
             {/* Section: Cliente */}
             <div>
-              <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)", marginBottom:10 }}>Datos del Cliente</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)" }}>Datos del Cliente</div>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPii(!showPii)} 
+                  style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: "var(--text2)", fontSize: 11 }}
+                  title={showPii ? "Ocultar datos" : "Mostrar datos"}
+                >
+                  {showPii ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span>{showPii ? "Ocultar" : "Ver"}</span>
+                </button>
+              </div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><User size={14} /><span style={{ fontWeight:600, color:"var(--text1)" }}>{ticket.customer?.full_name || ticket._frontendName || "—"}</span></div>
                 {(ticket.customer?.phone_number || ticket._frontendPhone) && (
-                  <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><Smartphone size={14} /><span>{ticket.customer?.phone_number || ticket._frontendPhone}</span></div>
+                  <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><Smartphone size={14} /><span>{showPii ? (ticket.customer?.phone_number || ticket._frontendPhone) : maskPhone(ticket.customer?.phone_number || ticket._frontendPhone)}</span></div>
                 )}
-                <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><Mail size={14} /><span>{ticket.client_email || ticket.customer?.email || "—"}</span></div>
+                <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><Mail size={14} /><span>{showPii ? (ticket.client_email || ticket.customer?.email || "—") : maskEmail(ticket.client_email || ticket.customer?.email || "—")}</span></div>
               </div>
             </div>
 
@@ -357,6 +414,20 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
               <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)", marginBottom:10 }}>Dispositivo</div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}><Calendar size={14} /><span>Ingreso: {formatDate(ticket.created_at)}</span></div>
+                <div style={{ display:"flex", gap:8, fontSize:13, color:"var(--text2)", alignItems: "center" }}>
+                  <Wrench size={14} />
+                  <span>Técnico:</span>
+                  <select 
+                    value={ticket.technician?.id || ""} 
+                    onChange={handleAssign}
+                    style={{ background:"var(--surface2)", color:"var(--text1)", border:"1px solid var(--border)", borderRadius:"6px", padding:"4px 8px", fontSize:"12px" }}
+                  >
+                    <option value="" disabled>Sin asignar</option>
+                    {technicians.map(t => (
+                      <option key={t.id} value={t.id}>{t.full_name}</option>
+                    ))}
+                  </select>
+                </div>
                 {ticket.issue_description && (
                   <div style={{ fontSize:13, color:"var(--text2)", background:"var(--bg)", border:"1px solid var(--border)", borderRadius:6, padding:"10px 12px", display:"flex", gap:8 }}><AlertTriangle size={14} style={{flexShrink:0, marginTop:2}}/> {ticket.issue_description}</div>
                 )}
@@ -477,14 +548,16 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     )}
 
     {/* DIAGNOSTIC MODAL — separate from detail modal to avoid nesting issues */}
-    {showDiagModal && (
-      <DiagnosticModal
-        ticketId={ticket.id}
-        ticket={ticket}
-        onClose={() => setShowDiagModal(false)}
-        onSuccess={handleDiagnosticSuccess}
-      />
-    )}
+    <Suspense fallback={<div className="modal-overlay"><div className="spinner" /></div>}>
+      {showDiagModal && (
+        <DiagnosticModal
+          ticketId={ticket.id}
+          ticket={ticket}
+          onClose={() => setShowDiagModal(false)}
+          onSuccess={handleDiagnosticSuccess}
+        />
+      )}
+    </Suspense>
     </>
   );
 }

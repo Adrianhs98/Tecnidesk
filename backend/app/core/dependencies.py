@@ -21,12 +21,15 @@ endpoint que use `subscription_guard` NO necesita declarar `get_current_user`
 por separado.
 """
 from datetime import datetime, timezone
+import secrets
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
 
 from app.core.security import verify_access_token
 from app.database import get_db
@@ -152,3 +155,62 @@ async def subscription_guard(
             raise _PAYMENT_EXCEPTION
 
     return current_user
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dependency 3: admin_guard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def admin_guard(
+    current_user: User = Depends(subscription_guard),
+) -> User:
+    """
+    Extiende subscription_guard: además de suscripción activa,
+    requiere role == 'admin'.
+    """
+    from app.models.user import UserRoleEnum
+    if current_user.role != UserRoleEnum.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador para esta acción."
+        )
+    return current_user
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dependency 4: superadmin_key_guard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_superadmin_key_scheme = APIKeyHeader(
+    name="X-Superadmin-Key",
+    auto_error=False,
+    description="Clave de súper-administrador para operaciones de plataforma.",
+)
+
+
+async def superadmin_key_guard(
+    api_key: str | None = Depends(_superadmin_key_scheme),
+) -> str:
+    """
+    Verifica que la petición incluya el header X-Superadmin-Key con la clave
+    configurada en SUPERADMIN_API_KEY. Usa secrets.compare_digest para evitar
+    ataques de timing.
+
+    Raises:
+        HTTP 401: si el header X-Superadmin-Key no está presente.
+        HTTP 403: si la clave proporcionada es incorrecta.
+    """
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Se requiere la cabecera X-Superadmin-Key para esta acción.",
+        )
+
+    settings = get_settings()
+    if not secrets.compare_digest(api_key, settings.superadmin_api_key):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clave de superadministrador inválida.",
+        )
+
+    return api_key

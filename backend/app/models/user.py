@@ -42,8 +42,8 @@ class User(UUIDMixin, TimestampMixin, Base):
 
     # Relaciones
     shop: Mapped["Shop"] = relationship("Shop", back_populates="users")  # noqa: F821
-    assigned_tickets: Mapped[list["Ticket"]] = relationship(  # noqa: F821
-        "Ticket", back_populates="assigned_technician", foreign_keys="Ticket.assigned_technician_id"
+    assigned_tickets_legacy: Mapped[list["Ticket"]] = relationship(  # noqa: F821
+        "Ticket", back_populates="assigned_technician_legacy", foreign_keys="Ticket.assigned_technician_id"
     )
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(  # noqa: F821
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"

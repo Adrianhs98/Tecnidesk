@@ -47,6 +47,9 @@ class Shop(UUIDMixin, Base):
     )
 
     # Relaciones
+    technicians: Mapped[list["Technician"]] = relationship(  # noqa: F821
+        "Technician", back_populates="shop", cascade="all, delete-orphan"
+    )
     subscriptions: Mapped[list["Subscription"]] = relationship(  # noqa: F821
         "Subscription", back_populates="shop", cascade="all, delete-orphan"
     )

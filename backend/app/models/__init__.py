@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.models.customer import Customer
 from app.models.inventory import Inventory
+from app.models.technician import Technician
 from app.models.ticket import Ticket
 from app.models.ticket_item import TicketItem
 from app.models.webhook_log import WebhookLog
@@ -26,6 +27,7 @@ __all__ = [
     "RefreshToken",
     "Customer",
     "Inventory",
+    "Technician",
     "Ticket",
     "TicketItem",
     "WebhookLog",

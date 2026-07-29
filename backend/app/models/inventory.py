@@ -22,6 +22,7 @@ class Inventory(UUIDMixin, TimestampMixin, Base):
         index=True,
     )
     item_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    sku: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     selling_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

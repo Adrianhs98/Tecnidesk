@@ -18,11 +18,14 @@ const COMMON_SUGGESTIONS = [
 
 export default function InventoryModal({ onClose }) {
   const [items, setItems] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Search
+  // Search & Pagination
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(10);
   
   // Form states
   const [showForm, setShowForm] = useState(false);
@@ -45,9 +48,16 @@ export default function InventoryModal({ onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(`${API_BASE}/inventory`);
+      const skip = page * limit;
+      let url = `${API_BASE}/inventory?skip=${skip}&limit=${limit}`;
+      if (searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+      const res = await authFetch(url);
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      setItems(await res.json());
+      const data = await res.json();
+      setItems(data.items || []);
+      setTotalItems(data.total || 0);
     } catch (err) {
       setError(err.message || "Error al cargar el inventario.");
     } finally {
@@ -57,7 +67,7 @@ export default function InventoryModal({ onClose }) {
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [page, limit, searchQuery]);
 
   const handleOpenAdd = () => {
     setEditItem(null);
@@ -209,9 +219,7 @@ export default function InventoryModal({ onClose }) {
     }
   };
 
-  const filteredItems = items.filter(item => 
-    item.item_name.toLowerCase().includes(searchQuery.toLowerCase().trim())
-  );
+  const filteredItems = items;
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -248,12 +256,24 @@ export default function InventoryModal({ onClose }) {
                   placeholder="Buscar repuesto..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ paddingLeft: 38, fontSize: 13 }}
+                  style={{ paddingLeft: 36, width: "100%", fontSize: 13 }}
                 />
               </div>
-              <button className="btn-primary" onClick={handleOpenAdd} style={{ width: "auto", display: "flex", alignItems: "center", gap: 6, padding: "10px 16px" }}>
-                <Plus size={16} />
-                <span>Nuevo Repuesto</span>
+              <select 
+                className="form-input" 
+                value={limit} 
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(0);
+                }} 
+                style={{ width: "auto", fontSize: 13 }}
+              >
+                <option value={10}>10 por página</option>
+                <option value={20}>20 por página</option>
+                <option value={50}>50 por página</option>
+              </select>
+              <button className="btn-new-ticket" onClick={handleOpenAdd} style={{ width: "auto", display: "flex", gap: 6 }}>
+                <Plus size={16} /> Nuevo
               </button>
             </div>
           )}
@@ -298,7 +318,7 @@ export default function InventoryModal({ onClose }) {
                           color: itemName === suggestion ? "var(--accent)" : "var(--text2)",
                           borderRadius: 6,
                           cursor: "pointer",
-                          transition: "all 0.15s"
+                          transition: "background-color 0.15s, border-color 0.15s, color 0.15s"
                         }}
                       >
                         {suggestion.trim()}
@@ -500,6 +520,30 @@ export default function InventoryModal({ onClose }) {
           ) : (
             <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text3)", fontStyle: "italic", fontSize: 13 }}>
               {searchQuery ? "No se encontraron repuestos con ese nombre." : "No hay repuestos registrados en el inventario."}
+            </div>
+          )}
+          
+          {!loading && filteredItems.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+              <button 
+                className="btn-secondary" 
+                disabled={page === 0} 
+                onClick={() => setPage(p => p - 1)}
+                style={{ width: "auto" }}
+              >
+                Anterior
+              </button>
+              <span style={{ color: "var(--text)", alignSelf: "center", fontSize: 13 }}>
+                Página {page + 1} de {Math.ceil(totalItems / limit) || 1} ({totalItems} totales)
+              </span>
+              <button 
+                className="btn-secondary" 
+                disabled={(page + 1) * limit >= totalItems} 
+                onClick={() => setPage(p => p + 1)}
+                style={{ width: "auto" }}
+              >
+                Siguiente
+              </button>
             </div>
           )}
         </div>

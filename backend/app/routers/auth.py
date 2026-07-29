@@ -66,6 +66,14 @@ async def login(
     try:
         user = await authenticate_user(db, str(payload.email), payload.password)
         access_token, refresh_token = await create_token_pair(db, user)
+        
+        # Obtener nombre del local para el frontend
+        from sqlalchemy import select
+        from app.models.shop import Shop
+        shop_res = await db.execute(select(Shop).where(Shop.id == user.shop_id))
+        shop = shop_res.scalar_one_or_none()
+        shop_name = shop.business_name if shop else None
+        
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -76,6 +84,7 @@ async def login(
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
+        shop_name=shop_name,
     )
 
 

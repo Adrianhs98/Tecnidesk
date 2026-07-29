@@ -42,10 +42,19 @@ class Ticket(UUIDMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    # FK legacy → users.id (se retirará en la migración de limpieza, Fase 8)
     assigned_technician_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=True,
+    )
+
+    # FK nueva → technicians.id (entidad propia del módulo de técnicos)
+    technician_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("technicians.id"),
+        nullable=True,
+        index=True,
     )
 
     device_brand: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -81,8 +90,13 @@ class Ticket(UUIDMixin, TimestampMixin, Base):
     # Relaciones
     shop: Mapped["Shop"] = relationship("Shop", back_populates="tickets")  # noqa: F821
     customer: Mapped["Customer"] = relationship("Customer", back_populates="tickets")  # noqa: F821
-    assigned_technician: Mapped["User | None"] = relationship(  # noqa: F821
-        "User", back_populates="assigned_tickets", foreign_keys=[assigned_technician_id]
+    # Relación legacy → User (mantiene compatibilidad hasta la migración de limpieza)
+    assigned_technician_legacy: Mapped["User | None"] = relationship(  # noqa: F821
+        "User", back_populates="assigned_tickets_legacy", foreign_keys=[assigned_technician_id]
+    )
+    # Relación nueva → Technician (módulo de técnicos)
+    technician: Mapped["Technician | None"] = relationship(  # noqa: F821
+        "Technician", back_populates="assigned_tickets", foreign_keys=[technician_id]
     )
     items: Mapped[list["TicketItem"]] = relationship(  # noqa: F821
         "TicketItem", back_populates="ticket", cascade="all, delete-orphan"

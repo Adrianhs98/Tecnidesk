@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, computed_field, EmailStr
+from pydantic import BaseModel, Field, computed_field, EmailStr, model_validator
 
 from app.models.ticket import TicketStatusEnum
 from app.models.ticket_item import ItemTypeEnum
@@ -113,6 +113,22 @@ class TicketCreate(BaseModel):
         None, max_length=50, description="PIN o Patrón descifrado (será encriptado vía Fernet)."
     )
 
+    assignment_mode: str = Field(
+        default="unassigned",
+        pattern=r"^(manual|random|unassigned)$",
+        description="Modo de asignación: manual, random o unassigned"
+    )
+    technician_id: uuid.UUID | None = Field(
+        None,
+        description="UUID del técnico. Requerido si assignment_mode == 'manual'"
+    )
+
+    @model_validator(mode="after")
+    def validate_assignment(self):
+        if self.assignment_mode == "manual" and self.technician_id is None:
+            raise ValueError("technician_id es obligatorio cuando assignment_mode es 'manual'")
+        return self
+
 
 class TicketUpdate(BaseModel):
     """Payload para actualizaciones generales u opcionales."""
@@ -154,6 +170,7 @@ class TicketResponse(BaseModel):
     shop_id: uuid.UUID
     customer_id: uuid.UUID
     assigned_technician_id: uuid.UUID | None
+    technician_id: uuid.UUID | None = None
 
     tracking_token: str
     device_brand: str
@@ -182,6 +199,7 @@ class TicketListResponse(TicketResponse):
     Incluye info básica del cliente.
     """
     customer: CustomerBasicInfo | None = None
+    technician: TechnicianBasicInfo | None = None
 
 
 class TicketDetailResponse(TicketResponse):
@@ -190,7 +208,7 @@ class TicketDetailResponse(TicketResponse):
     Incluye arrays anidados y relaciones extendidas.
     """
     customer: CustomerBasicInfo | None = None
-    assigned_technician: TechnicianBasicInfo | None = None
+    technician: TechnicianBasicInfo | None = None
     items: list[TicketItemResponse] = []
     evidences: list[TicketEvidenceResponse] = []
 
@@ -237,3 +255,9 @@ class PublicTicketResponse(BaseModel):
             "NO_APROBADO": "Reparación no aprobada / Cancelada",
         }
         return status_map.get(self.status.value, str(self.status.value))
+
+
+class RejectTicketRequest(BaseModel):
+    """Payload para rechazar un presupuesto con motivo opcional."""
+    rejection_reason: str | None = None
+

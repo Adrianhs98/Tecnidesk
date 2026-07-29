@@ -9,9 +9,11 @@ from app.models.inventory import Inventory
 from app.schemas.inventory import InventoryCreate, InventoryUpdate
 
 
+from sqlalchemy import func
+
 async def list_inventory(
-    session: AsyncSession, shop_id: uuid.UUID, search: str | None = None, include_inactive: bool = False
-) -> list[Inventory]:
+    session: AsyncSession, shop_id: uuid.UUID, search: str | None = None, include_inactive: bool = False, skip: int = 0, limit: int = 50, sku: str | None = None
+) -> tuple[list[Inventory], int]:
     """Lista las piezas de inventario del taller."""
     stmt = select(Inventory).where(Inventory.shop_id == shop_id)
     
@@ -21,9 +23,17 @@ async def list_inventory(
     if search:
         stmt = stmt.where(Inventory.item_name.ilike(f"%{search}%"))
         
-    stmt = stmt.order_by(Inventory.item_name)
+    if sku:
+        if hasattr(Inventory, 'sku'):
+            stmt = stmt.where(Inventory.sku.ilike(f"%{sku}%"))
+            
+    total_query = select(func.count()).select_from(stmt.subquery())
+    total_result = await session.execute(total_query)
+    total = total_result.scalar_one_or_none() or 0
+        
+    stmt = stmt.order_by(Inventory.item_name).offset(skip).limit(limit)
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total
 
 
 async def create_inventory_item(

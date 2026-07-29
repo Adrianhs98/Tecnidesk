@@ -2,9 +2,12 @@
 Punto de entrada principal de la aplicación TecniDesk.
 Configura FastAPI, CORS y registra todos los routers.
 """
+import logging
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -43,11 +46,28 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+logger = logging.getLogger("tecnidesk.main")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Atrapa errores 500 no controlados, genera un request_id y devuelve
+    un JSONResponse para que el middleware de CORS pueda procesarlo y
+    el navegador no oculte el error detrás de un mensaje de CORS genérico.
+    """
+    request_id = str(uuid.uuid4())
+    logger.error(f"Unhandled exception [req_id={request_id}] en {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Error interno del servidor.",
+            "request_id": request_id,
+        }
+    )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# Producción: solo subdominios de adriansaas.xyz y el dominio raíz
-# Desarrollo: orígenes adicionales desde ALLOWED_ORIGINS_DEV y frontend_url
-_prod_regex = r"^https://(.*\.+)?adriansaas\.xyz$"
+# Producción: solo subdominios de tecnidesk.lat y adriansaas.xyz (y dominios raíz)
+_prod_regex = r"^https://(.*\.+)?(tecnidesk\.lat|adriansaas\.xyz)$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,12 +87,18 @@ app.include_router(shops.router)
 from app.routers import auth  # noqa: E402
 app.include_router(auth.router)
 
+from app.routers import technicians  # noqa: E402
+app.include_router(technicians.router)
+
 # Fase 2.3 — Tickets (Órdenes de Reparación)
 from app.routers import tickets  # noqa: E402
 app.include_router(tickets.router)
 
 from app.routers import inventory  # noqa: E402
 app.include_router(inventory.router)
+
+from app.routers import clients
+app.include_router(clients.router)
 
 # RUTAS PÚBLICAS — El antiguo /track fue reemplazado por /tracking (app/api/v1/)
 

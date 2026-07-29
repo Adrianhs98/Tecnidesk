@@ -50,7 +50,10 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
       setLoadingInv(true);
       try {
         const res = await authFetch(`${API_BASE}/inventory`);
-        if (res.ok && mounted) setInventory(await res.json());
+        if (res.ok && mounted) {
+          const data = await res.json();
+          setInventory(Array.isArray(data) ? data : (data.items || []));
+        }
       } catch (err) {
         console.error("Error loading inventory:", err);
       } finally {
@@ -61,15 +64,17 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
     return () => { mounted = false; };
   }, []);
 
+  const inventoryList = Array.isArray(inventory) ? inventory : (inventory?.items || []);
+
   // Determina si el formulario de repuesto muestra input de nombre/precio manual
   const isCustom = quickOption === "custom";
-  const isInventoryItem = inventory.some(i => i.id === quickOption);
+  const isInventoryItem = inventoryList.some(i => i.id === quickOption);
   const isQuickLabel = QUICK_OPTIONS.filter(o => o.id !== "custom").some(o => o.id === quickOption);
 
   // Obtener precio y nombre del item seleccionado
   const getSelectedItemData = () => {
     if (isInventoryItem) {
-      const inv = inventory.find(i => i.id === quickOption);
+      const inv = inventoryList.find(i => i.id === quickOption);
       return { description: inv.item_name, unit_price: parseFloat(inv.selling_price), inventory_id: inv.id, item_type: "part" };
     }
     if (isQuickLabel) {
@@ -335,7 +340,7 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
                       background: quickOption === opt.id ? "rgba(201,167,106,0.15)" : "var(--bg)",
                       border: quickOption === opt.id ? "1.5px solid var(--accent)" : "1px solid var(--border)",
                       color: quickOption === opt.id ? "var(--accent)" : "var(--text2)",
-                      transition: "all 0.15s",
+                      transition: "background-color 0.15s, border-color 0.15s, color 0.15s",
                     }}
                   >
                     {opt.label}
@@ -344,7 +349,7 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
               </div>
 
               {/* Inventario como dropdown si hay items */}
-              {inventory.length > 0 && (
+              {inventoryList.length > 0 && (
                 <select
                   className="status-select"
                   value={isInventoryItem ? quickOption : ""}
@@ -357,7 +362,7 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
                   style={{ fontSize: 12 }}
                 >
                   <option value="">📦 Seleccionar desde inventario...</option>
-                  {inventory.map(i => (
+                  {inventoryList.map(i => (
                     <option key={i.id} value={i.id} disabled={i.stock_quantity === 0}>
                       {i.stock_quantity <= i.low_stock_alert ? "⚠️ " : ""}{i.item_name} (Stock: {i.stock_quantity}) — ${parseFloat(i.selling_price).toFixed(2)}
                     </option>

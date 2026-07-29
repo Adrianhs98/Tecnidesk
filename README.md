@@ -1,349 +1,327 @@
-# TecniDesk 🔧📱
+# TecniDesk
 
-> **Micro SaaS Multi-Tenant** para gestión integral de talleres de reparación de celulares — Diseñado para el mercado ecuatoriano.
+Micro SaaS multi-tenant para la gestión de talleres de reparación de celulares.
 
-TecniDesk cubre todo el ciclo de vida de una reparación: desde el ingreso del equipo hasta la entrega, con un **portal público de rastreo con whitelabeling dinámico** donde el cliente puede consultar el estado, aprobar presupuestos y negociar directamente con el taller vía WhatsApp, todo sin necesidad de crear una cuenta.
+TecniDesk centraliza el ingreso de equipos, clientes, tickets de reparación, diagnósticos, repuestos, evidencias fotográficas, presupuestos y seguimiento público. Cada taller trabaja aislado mediante su `shop_id` y puede ofrecer a sus clientes un portal de rastreo con identidad visual propia.
 
----
+## Funcionalidades
 
-## ✨ Características Principales
+- Panel administrativo para gestionar tickets, clientes, técnicos y estados de reparación.
+- Gestión de Técnicos con métricas de rendimiento, especialidades inferidas y asignación automática (Load-Balancing).
+- Inventario de repuestos con altas, edición, eliminación lógica, reabastecimiento y alertas de stock bajo.
+- Sugerencias de repuestos frecuentes y selección de piezas desde el inventario al preparar un diagnóstico.
+- Diagnóstico técnico con repuestos, cantidades y precios asociados al ticket.
+- Descuento y restauración de stock al agregar o quitar piezas de una reparación.
+- Evidencias fotográficas comprimidas en el navegador antes de enviarse al almacenamiento.
+- Portal público de seguimiento mediante token, sin cuenta para el cliente.
+- Aprobación o rechazo de presupuestos desde el portal de seguimiento.
+- Contacto contextual con el taller mediante WhatsApp.
+- Whitelabeling: nombre y logotipo del taller en el portal público.
+- Autenticación con JWT de acceso y refresh tokens persistentes.
+- Control de suscripción mediante `HTTP 402` cuando el plan no está vigente.
+- Estadísticas del panel calculadas directamente en PostgreSQL.
 
-| Área | Funcionalidad |
-|---|---|
-| 🏢 **Multi-Tenancy** | Cada taller opera en un subdominio único con total aislamiento de datos por `shop_id` |
-| 🔐 **Seguridad robusta** | JWT (Access + Refresh), cifrado Fernet para PINs, bcrypt para contraseñas, rate limiting por IP |
-| 🎫 **Gestión de Tickets** | Órdenes de reparación completas: diagnóstico, asignación de técnico, estados e ítems de inventario |
-| 📦 **Control de Inventario** | Catálogo CRUD completo con validaciones numéricas estrictas, alertas de stock bajo y actualización optimista |
-| 📸 **Evidencias Fotográficas** | Compresión en el navegador (< 800 KB) antes del upload a Cloudflare R2 |
-| 🔍 **Portal de Rastreo Público** | Timeline interactivo del progreso de la reparación, sin login requerido |
-| 💬 **Negociación por WhatsApp** | Botón contextual unificado en la etapa de presupuestación para facilitar la conversación con el taller |
-| 🎨 **Whitelabeling** | El portal muestra el nombre y logo del taller dinámicamente. TecniDesk aparece solo en el footer como marca secundaria |
-| 📊 **Estadísticas en tiempo real** | Conteos reales por estado vía `COUNT() FILTER (WHERE ...)` — nunca truncados por paginación |
-| 💰 **Control de Suscripción** | Guard `HTTP 402` que bloquea acceso automáticamente si la suscripción expiró, fue suspendida o cancelada |
-| 📧 **Onboarding completo** | Registro captura nombre, subdominio, correo y número de WhatsApp de contacto del taller |
+## Arquitectura
 
----
-
-## 🏗️ Arquitectura General
-
-```
-tecnidesk/
-├── backend/     ← API REST (Python / FastAPI)
-└── frontend/    ← SPA (React 19 / Vite 7)
+```text
+Tecnidesk/
+├── backend/     API REST con FastAPI
+└── frontend/    SPA con React y Vite
 ```
 
-- El **backend** expone una API REST con documentación interactiva en `/docs` (Swagger UI).
-- El **frontend** es una SPA que se comunica exclusivamente con la API, usando JWT para autenticación y `authFetch` para renovar tokens de forma transparente.
-- El **multi-tenancy es lógico**: todos los tenants comparten base de datos, aislados por `shop_id` validado en cada operación de la capa de servicios.
-
----
-
-## 🚀 Stack Tecnológico
+El backend expone la API y concentra la autenticación, autorización, aislamiento multi-tenant, lógica de negocio, persistencia y migraciones. El frontend consume la API mediante `authFetch`, que adjunta el token de acceso y gestiona la renovación de sesión.
 
 ### Backend
 
-| Tecnología | Versión | Rol |
-|---|---|---|
-| **FastAPI** | 0.115 | Framework principal de la API REST |
-| **SQLAlchemy** | 2.0 | ORM asíncrono (async/await) |
-| **asyncpg** | 0.31 | Driver PostgreSQL de alta performance |
-| **Alembic** | 1.14 | Migraciones controladas de base de datos |
-| **Pydantic** | v2 | Validación y serialización de esquemas |
-| **python-jose** | 3.3 | Generación y verificación de JWT |
-| **cryptography (Fernet)** | 43.0 | Cifrado simétrico de PINs de dispositivos |
-| **bcrypt / passlib** | 4.0 | Hash seguro de contraseñas de usuarios |
-| **SlowAPI** | 0.1.9 | Rate limiting por IP en rutas vulnerables |
-| **aioboto3** | 13.2 | Integración con Cloudflare R2 (evidencias) |
-| **resend** | 2.23 | Correos transaccionales |
-| **uvicorn** | 0.30 | Servidor ASGI |
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.0 con consultas asíncronas
+- PostgreSQL y `asyncpg`
+- Alembic
+- Pydantic v2
+- JWT, Fernet y bcrypt
+- SlowAPI para rate limiting
+- Cloudflare R2 para evidencias
+- Resend para correos transaccionales
 
 ### Frontend
 
-| Tecnología | Versión | Rol |
-|---|---|---|
-| **React** | 19 | Biblioteca UI principal |
-| **Vite** | 7 | Build tool y servidor de desarrollo ultra-rápido |
-| **TypeScript** | 5.9 | Tipado progresivo (JS + TS) |
-| **React Router** | v7 | Enrutado client-side con guards de protección |
-| **Tailwind CSS** | v4 | Estilos utility-first, integrado nativamente en Vite |
-| **browser-image-compression** | 2.0 | Compresión de imágenes antes del upload |
+- React 19
+- Vite 7
+- React Router 7
+- Tailwind CSS 4 y variables CSS del proyecto
+- `lucide-react` para iconografía
+- `browser-image-compression` para evidencias fotográficas
 
----
+## Estructura principal
 
-## 🗄️ Modelos de Base de Datos
-
-```
-plans             → Planes de suscripción disponibles
-shops             → Tenants (talleres): subdominio único, logo, estado de suscripción, WhatsApp
-subscriptions     → Fuente de verdad del estado de pago por taller
-users             → Personal del taller (admin / technician)
-refresh_tokens    → Tokens de refresco stateful con hash SHA-256 (rotación de un solo uso)
-customers         → Clientes del taller (índice compuesto shop_id + phone_number)
-inventory         → Catálogo de repuestos y mano de obra con alertas de stock bajo
-tickets           → Órdenes de reparación (tracking_token auto-generado, PIN cifrado con Fernet)
-ticket_items      → Repuestos e insumos vinculados a un ticket
-ticket_evidences  → Fotos y archivos de evidencia subidos a Cloudflare R2
-webhook_logs      → Historial de llamadas a webhooks externos por cambio de estado
-```
-
----
-
-## 🔒 Mecanismos de Seguridad
-
-1. **Aislamiento Multi-Tenant** — Cada query filtra por `shop_id` del usuario en sesión. Un taller nunca puede acceder a datos de otro.
-2. **Subscription Guard** — Middleware de ruta que consulta la tabla `subscriptions`. Retorna `HTTP 402` si la suscripción es inválida.
-3. **Cifrado Fernet** — El PIN del dispositivo se cifra antes de persistirse. Solo se desencripta en la capa de servicios interna.
-4. **JWT de doble capa** — Access tokens de 60 min + Refresh tokens stateful de 7 días con Single-Use Rotation para prevenir replay attacks.
-5. **CORS con Regex** — Solo acepta orígenes de producción que sean subdominios del dominio principal configurado.
-6. **Rate Limiting** — `5 req/min` en `/auth/login` y `30 req/min` en el endpoint de tracking público, por IP.
-
----
-
-## 📁 Estructura de Directorios
-
-<details>
-<summary><strong>Backend — <code>backend/</code></strong></summary>
-
-```
+```text
 backend/
 ├── app/
-│   ├── api/v1/endpoints/
-│   │   └── tracking.py        ← Endpoint público de rastreo (sin auth)
-│   ├── core/
-│   │   └── dependencies.py    ← get_current_user, subscription_guard
-│   ├── models/                ← Modelos ORM SQLAlchemy 2.0
-│   ├── routers/               ← Controladores REST (auth, tickets, shops, health)
-│   ├── schemas/               ← Esquemas Pydantic v2 de entrada/salida
-│   ├── services/              ← Lógica de negocio (auth, tickets, email, storage)
-│   ├── config.py              ← Variables de entorno con Pydantic Settings
-│   ├── database.py            ← Motor de conexión asíncrono
-│   └── main.py                ← Entry point (FastAPI, CORS, middlewares)
-├── alembic/                   ← Control de migraciones de la base de datos
-├── scripts/
-│   ├── seed.py                ← Datos iniciales (planes de suscripción)
-│   └── activate_shop.py       ← Activación manual de tiendas vía CLI
-├── .env.example
+│   ├── api/v1/       Endpoints públicos de tracking
+│   ├── core/         Dependencias, guards y rate limiting
+│   ├── models/       Modelos SQLAlchemy
+│   ├── routers/      Rutas FastAPI
+│   ├── schemas/      Esquemas Pydantic
+│   ├── services/     Lógica de negocio
+│   ├── config.py     Configuración desde variables de entorno
+│   ├── database.py   Conexión asíncrona a PostgreSQL
+│   └── main.py       Aplicación FastAPI, CORS y middlewares
+├── alembic/          Migraciones de base de datos
+├── scripts/          Seeds y tareas operativas
 ├── requirements.txt
 └── alembic.ini
-```
 
-</details>
-
-<details>
-<summary><strong>Frontend — <code>frontend/</code></strong></summary>
-
-```
 frontend/
 ├── src/
-│   ├── api/                   ← Base URL y authFetch (interceptor JWT automático)
-│   ├── components/
-│   │   ├── guards/            ← ProtectedRoute y PublicRoute
-│   │   └── shared/            ← LogoBadge, Skeleton, Stepper y componentes comunes
-│   ├── features/admin/
-│   │   ├── components/        ← AdminTicketCard, NewTicketModal y demás modales
-│   │   └── AdminDashboard.jsx ← Panel administrativo principal
-│   ├── pages/
-│   │   ├── HomePage.jsx
-│   │   ├── LoginPage.jsx
-│   │   ├── RegisterPage.jsx
-│   │   └── TrackingPortal.jsx ← Portal público con whitelabeling dinámico
-│   ├── utils/                 ← Constantes de estado, formateo de fechas y utilidades
-│   ├── App.jsx                ← Definición de rutas con React Router
-│   └── main.tsx               ← Entry point React
+│   ├── api/                      Cliente HTTP y configuración de API
+│   ├── components/               Componentes compartidos y guards
+│   ├── features/admin/           Dashboard y componentes administrativos
+│   ├── pages/                    Login, registro y tracking público
+│   ├── utils/                    Estados y utilidades
+│   ├── App.jsx
+│   └── main.tsx
 ├── public/
-├── vercel.json                ← SPA routing para Vercel
-├── index.html
 ├── package.json
+├── vercel.json
 └── vite.config.ts
 ```
 
-</details>
+## Requisitos
 
----
+- Python 3.12 o superior
+- Node.js 18 o superior
+- PostgreSQL 14 o superior, local o administrado
+- Credenciales de Cloudflare R2 para evidencias
+- API key de Resend para correos transaccionales
 
-## ⚙️ Instalación y Configuración
+## Instalación local
 
-### Prerrequisitos
+### Backend
 
-- **Python** 3.12+
-- **Node.js** 18+
-- **PostgreSQL** 14+ (o cuenta en [Supabase](https://supabase.com))
-- **Cloudflare R2** — Almacenamiento de evidencias fotográficas
-- **Resend** — Correos transaccionales
-
----
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/tu-usuario/tecnidesk.git
-cd tecnidesk
-```
-
----
-
-### 2. Configurar el Backend
+Desde la raíz del proyecto:
 
 ```bash
 cd backend
-
-# Crear y activar entorno virtual
 python -m venv .venv
+```
 
-# Windows
-.venv\Scripts\activate
-# Linux / macOS
+Activar el entorno virtual:
+
+```bash
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# Linux o macOS
 source .venv/bin/activate
+```
 
-# Instalar dependencias
+Instalar dependencias:
+
+```bash
 pip install -r requirements.txt
 ```
 
-#### Variables de Entorno
+Crear la configuración local:
 
 ```bash
 # Windows
-copy .env.example .env
-# Linux / macOS
+Copy-Item .env.example .env
+
+# Linux o macOS
 cp .env.example .env
 ```
 
-| Variable | Descripción |
-|---|---|
-| `DB_URL` | Conexión asíncrona: `postgresql+asyncpg://user:pass@host:port/db` |
-| `DATABASE_URL` | Conexión síncrona para Alembic CLI: `postgresql://user:pass@host:port/db` |
-| `JWT_SECRET` | Cadena aleatoria ≥ 64 chars |
-| `JWT_REFRESH_SECRET` | Segunda cadena aleatoria ≥ 64 chars (distinta a la anterior) |
-| `FERNET_KEY` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `BCRYPT_ROUNDS` | Factor de trabajo bcrypt (`10` dev / `12` prod) |
-| `R2_ENDPOINT` | URL del bucket Cloudflare R2 |
-| `R2_ACCESS_KEY` | Access Key de Cloudflare R2 |
-| `R2_SECRET_KEY` | Secret Key de Cloudflare R2 |
-| `R2_BUCKET_NAME` | Nombre del bucket (ej: `tecnidesk-evidencias`) |
-| `RESEND_API_KEY` | API Key de Resend |
-| `WEBHOOK_URL` | Endpoint externo para notificaciones de cambio de estado |
-| `WEBHOOK_SECRET` | Secreto HMAC para validar autenticidad de webhooks |
-| `ALLOWED_ORIGINS_DEV` | Orígenes CORS locales (ej: `http://localhost:5173`) |
-
-#### Migraciones y datos iniciales
+Aplicar migraciones y cargar datos iniciales:
 
 ```bash
 alembic upgrade head
 python scripts/seed.py
 ```
 
-#### Iniciar servidor
+Iniciar la API:
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-> Documentación interactiva disponible en `http://localhost:8000/docs`
+Documentación interactiva:
 
----
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- Health check: `http://localhost:8000/health`
 
-### 3. Configurar el Frontend
+### Frontend
+
+En otra terminal:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Crea el archivo `.env.local` con la URL de tu API:
+Crear `frontend/.env.local`:
 
 ```env
 VITE_API_URL=http://localhost:8000
 ```
 
-#### Iniciar servidor
+Iniciar el servidor de desarrollo:
 
 ```bash
 npm run dev
 ```
 
-> La aplicación estará disponible en `http://localhost:5173`
+La aplicación estará disponible normalmente en `http://localhost:5173`.
 
----
+## Variables de entorno
 
-## 🖥️ Flujos Principales
+Las variables del backend se configuran en `backend/.env`. No deben subirse al repositorio.
 
-### Panel Administrativo (`/admin`)
-- Dashboard con estadísticas en tiempo real por estado, obtenidas del endpoint dedicado `GET /tickets/stats`
-- Creación de tickets con carga de evidencia fotográfica inicial en el mismo flujo
-- Cambio de estado con actualizaciones optimistas en la UI
-- Asignación de técnicos y actualización de diagnósticos
-- PIN del dispositivo visible y desencriptado tras cada actualización (nunca almacenado en texto plano)
-
-### Portal de Rastreo Público (`/tracking/:token`)
-- Acceso sin login mediante token único por ticket
-- Timeline interactivo (Stepper) con el progreso de la reparación
-- Aprobación o rechazo de presupuestos directamente desde el portal
-- Botón WhatsApp contextualizado en la etapa de presupuestación con microcopy orientado a la negociación
-- Whitelabeling dinámico: nombre y logo del taller desde el backend — "Impulsado por TecniDesk" solo en el footer
-
----
-
-## 🚢 Despliegue en Producción
-
-| Servicio | Plataforma Recomendada |
+| Variable | Uso |
 |---|---|
-| **Backend** | [Render](https://render.com) (Web Service Python) o VPS con Docker |
-| **Frontend** | [Vercel](https://vercel.com) — `vercel.json` ya configurado para SPA routing |
-| **Base de Datos** | [Supabase](https://supabase.com) (PostgreSQL administrado) |
-| **Almacenamiento** | [Cloudflare R2](https://www.cloudflare.com/products/r2/) |
-| **Email** | [Resend](https://resend.com) |
+| `DB_URL` | Conexión asíncrona de la aplicación, normalmente con `postgresql+asyncpg://` |
+| `DATABASE_URL` | Conexión síncrona opcional para herramientas CLI |
+| `JWT_SECRET` | Secreto para tokens de acceso |
+| `JWT_REFRESH_SECRET` | Secreto independiente para refresh tokens |
+| `FERNET_KEY` | Clave para cifrar datos sensibles del dispositivo |
+| `BCRYPT_ROUNDS` | Factor de trabajo para contraseñas |
+| `R2_ENDPOINT` | Endpoint de Cloudflare R2 |
+| `R2_ACCESS_KEY` | Credencial de acceso a R2 |
+| `R2_SECRET_KEY` | Credencial secreta de R2 |
+| `R2_BUCKET_NAME` | Bucket para evidencias |
+| `RESEND_API_KEY` | API key para correo transaccional |
+| `MAIL_FROM` | Remitente de correos |
+| `WEBHOOK_URL` | Endpoint opcional de notificaciones |
+| `WEBHOOK_SECRET` | Secreto para validar webhooks |
+| `FRONTEND_URL` | URL pública usada en enlaces enviados por correo |
+| `ALLOWED_ORIGINS_DEV` | Orígenes locales permitidos por CORS, separados por comas |
 
----
+En el frontend, `VITE_API_URL` debe apuntar al backend correspondiente al entorno. En producción no debe conservar la URL local `http://localhost:8000`.
 
-## 🗺️ Roadmap y Deuda Técnica
+## Flujo operativo
 
-### Pendientes Críticos
+1. El administrador registra un cliente y crea un ticket con los datos del equipo.
+2. El taller actualiza el estado, asigna técnico y registra evidencias.
+3. El técnico documenta el diagnóstico y agrega mano de obra o repuestos.
+4. Las piezas vinculadas al inventario descuentan stock de forma controlada.
+5. El cliente recibe o consulta el enlace público de seguimiento.
+6. El cliente aprueba, rechaza o negocia el presupuesto desde el portal.
+7. El taller continúa el flujo hasta marcar la reparación como lista para entregar.
 
-- [ ] **Vulnerabilidad IDOR en activación de tiendas:** El endpoint `/admin/activate-shop` solo verifica un usuario autenticado genérico. Debe protegerse con un `admin_guard` de super-administrador global. Activación disponible por ahora vía CLI (`scripts/activate_shop.py`).
-- [ ] **Blacklist de JWT con Redis:** Los Access Tokens (60 min) sobreviven al logout manual. Pendiente implementar invalidación inmediata con TTL en Redis.
+## Inventario
 
-### Mejoras Planificadas
+El módulo de inventario está disponible desde el panel administrativo y soporta:
 
-- [ ] **Worker de tareas asíncronas (ARQ / Celery + Redis):** Garantizar durabilidad en reintentos de webhooks ante reinicios del proceso.
-- [ ] **URLs prefirmadas para evidencias (R2):** Reemplazar buckets públicos por Pre-signed URLs de corta duración.
-- [ ] **TanStack Query en el frontend:** Migrar de `useState` / `useEffect` a caché automatizada con stale-while-revalidate.
-- [ ] **RBAC estructurado:** Roles y permisos granulares: super-admin SaaS, admin de taller, técnico.
+- Nombre, costo, precio de venta y stock inicial.
+- Umbral configurable de stock bajo.
+- Validación de cantidades enteras y valores monetarios no negativos.
+- Sugerencias de repuestos comunes, como pines de carga, baterías, displays y flex.
+- Regla de negocio para displays: deben registrarse con marca y modelo.
+- Reabastecimiento y eliminación lógica para conservar el historial de tickets.
 
----
+El endpoint utiliza el aislamiento del taller autenticado. Un usuario sólo puede consultar o modificar inventario asociado a su propio `shop_id`.
 
-## 📋 Changelog
+## Despliegue
 
-| Área | Descripción |
+La distribución recomendada es:
+
+| Componente | Plataforma |
 |---|---|
-| **Estabilidad de datos** | Pérdida de datos del cliente al cambiar estados → `selectinload` en SQLAlchemy + preservación de estado local en React |
-| **Integridad de ticket** | Desaparición del PIN y correo al crear tickets → endpoint POST retorna esquema anidado completo |
-| **Evidencias fotográficas** | Subida de evidencia desde el modal de creación → pipeline secuencial con `FormData` nativo |
-| **Estadísticas reales** | Métricas del dashboard truncadas → endpoint `GET /tickets/stats` con `COUNT() FILTER` en PostgreSQL |
-| **Fix PIN en actualizaciones** | Parpadeo "Sin PIN" tras cambios de estado → desencriptado en los tres servicios de actualización antes de retornar |
-| **Whitelabeling** | Portal de rastreo con nombre y logo dinámico del taller → `shop_name` + `shop_logo_url` en `PublicTicketResponse` |
-| **Canal WhatsApp** | Botón ausente en cuentas antiguas → campo `contact_whatsapp` capturado en onboarding; API retorna `null` en vez de string vacío |
-| **Módulo Inventario** | Operatividad total del inventario → CRUD con validación estricta de nombres/stock, Fix de bloqueo CORS en subdominios, y Fix 500 en inyección de `shop_id` |
+| Backend | Render u otro servicio ASGI |
+| Frontend | Vercel |
+| Base de datos | PostgreSQL administrado, por ejemplo Supabase |
+| Archivos | Cloudflare R2 |
+| Correo | Resend |
 
----
+Antes de desplegar:
 
-## 🎨 Guía de Estilo (Frontend)
+1. Confirmar que las migraciones están incluidas en el commit publicado.
+2. Ejecutar `alembic upgrade head` contra la base de datos de producción.
+3. Configurar `VITE_API_URL` en el proyecto del frontend.
+4. Configurar `FRONTEND_URL` y los orígenes permitidos en el backend.
+5. Revisar los logs del backend después de cada migración o cambio de variables.
+6. Verificar el flujo de login, creación de ticket, inventario y tracking público.
 
-Paleta oscura premium optimizada para visibilidad en talleres técnicos:
+## Comandos útiles
 
-- **Accent (Dorado):** `#C9A76A` — Botones primarios e indicadores destacados
-- **Success (Verde WhatsApp):** `#25D366` — Canal de comunicación y estados exitosos
-- **Background:** Modo oscuro profundo con capas de glassmorphism
-- **Tipografía:** Jerarquía clara con fuentes del sistema modernas
+```bash
+# Backend
+cd backend
+alembic current
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
 
----
+# Frontend
+cd frontend
+npm run dev
+npm run build
+npm run lint
+```
 
-## 📄 Licencia
+## Seguridad
 
-Proyecto desarrollado como parte de un proyecto de titulación académica. Todos los derechos reservados.
+- El aislamiento multi-tenant se aplica mediante el `shop_id` del usuario autenticado. Las dependencias resuelven la identidad y la suscripción del taller, y la capa de servicios vuelve a filtrar las consultas y mutaciones por ese identificador.
+- Las contraseñas se almacenan con hash bcrypt.
+- Los PIN o datos sensibles del dispositivo se cifran con Fernet.
+- Los refresh tokens se almacenan de forma persistente y se rotan.
+- Las rutas sensibles utilizan guards de autenticación y suscripción.
+- El acceso público al tracking se limita al token del ticket.
+- CORS debe configurarse con los dominios reales de cada entorno.
+- Los secretos deben permanecer únicamente en las variables de entorno del despliegue.
 
----
+### Rate limiting
 
-<p align="center">
-  Construido con ❤️ para talleres de celulares en Ecuador<br/>
-  <strong>TecniDesk</strong> — Gestión técnica, sin complicaciones.
-</p>
+SlowAPI limita `POST /auth/login` a `5 intentos por minuto y por IP`. Esto reduce intentos automatizados de fuerza bruta sobre las credenciales. El portal público de tracking utiliza tokens de ticket y no requiere sesión; cualquier límite adicional para esos endpoints debe considerarse una mejora independiente y no se presenta aquí como una protección ya implementada.
+
+### Verificación del aislamiento
+
+El criterio de seguridad es que un usuario nunca pueda consultar ni modificar datos de otro taller aunque conozca un UUID válido. Las operaciones administrativas reciben el contexto del usuario autenticado y los servicios aplican filtros por `shop_id` en tickets, clientes, inventario y operaciones relacionadas. Las verificaciones de base de datos y endpoints se ejecutan con los scripts descritos en la sección de pruebas; para una auditoría formal todavía sería recomendable convertir estos escenarios en una suite automatizada de regresión.
+
+## Pruebas y verificación
+
+El proyecto cuenta actualmente con scripts de verificación manual y pruebas de integración orientadas a los flujos críticos:
+
+| Script | Propósito |
+|---|---|
+| `backend/scripts/test_db.py` | Comprobar conexión y estado básico de la base de datos |
+| `backend/scripts/test_inventory_endpoint.py` | Verificar `GET` y `POST /inventory`, incluido `is_low_stock` |
+| `backend/scripts/test_real_post.py` | Probar la creación de inventario contra una base de datos real |
+| `backend/scripts/test_ticket_service.py` | Ejercitar escenarios del servicio de tickets y aislamiento de datos |
+
+Ejecutar desde `backend/`, con el entorno virtual y las variables configuradas:
+
+```bash
+python scripts/test_db.py
+python scripts/test_inventory_endpoint.py
+python scripts/test_real_post.py
+python scripts/test_ticket_service.py
+```
+
+Para validar el frontend:
+
+```bash
+cd frontend
+npm run build
+npm run lint
+```
+
+Estos scripts no sustituyen todavía una suite automatizada ejecutada en CI. La siguiente evolución recomendable es incorporar pytest para el backend, una base de datos de pruebas aislada y pruebas de regresión multi-tenant; en el frontend, añadir pruebas de componentes para formularios, modales y estados de error.
+
+## Documentación del proyecto
+
+TecniDesk se encuentra en una etapa funcional de MVP, con los flujos principales de administración de talleres, tickets, diagnóstico, inventario y tracking público implementados. La documentación complementaria está separada por propósito:
+
+- `PROJECT_STATE.md`: estado técnico, decisiones recientes y contexto para continuar el desarrollo.
+- `Gemini.md`: instrucciones operativas y criterios de trabajo del proyecto.
+- `AUDITORIA_TECNICA.md`: hallazgos, riesgos y controles revisados durante la auditoría.
+- `PLAN_REPARACION_PIN.md`: contexto de la reparación del flujo de PIN.
+- `PLAN_WHITELABEL.md`: decisiones del portal con identidad visual del taller.
+
+El README resume el producto y cómo ejecutarlo; estos documentos conservan el detalle histórico y técnico que no es necesario leer para una primera evaluación.
+
+## Licencia
+
+Proyecto desarrollado con fines académicos y de titulación. Actualmente el repositorio no incluye un archivo `LICENSE`, por lo que no se declara una licencia open source ni permisos de redistribución o modificación. La marca TecniDesk, su identidad visual y los datos de cualquier entorno desplegado son propietarios.
+
+Si el repositorio se publica como proyecto open source, debe añadirse una licencia explícita, por ejemplo MIT, y revisar por separado la licencia de assets, documentación y configuraciones de terceros.

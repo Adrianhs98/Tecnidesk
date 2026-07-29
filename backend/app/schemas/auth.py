@@ -9,7 +9,10 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class TechnicianCreate(BaseModel):
-    """Schema para la creación de un nuevo técnico."""
+    """
+    DEPRECATED: Usar TechnicianCreate de app/schemas/technician.py
+    Mantenido temporalmente por compatibilidad.
+    """
     shop_id: uuid.UUID = Field(..., description="ID del taller al que pertenece el técnico")
     full_name: str = Field(..., description="Nombre completo del técnico")
     email: EmailStr = Field(..., description="Email del técnico, será su usuario para login")
@@ -39,6 +42,7 @@ class TokenResponse(BaseModel):
     access_token: str = Field(..., description="JWT de acceso (60 min)")
     refresh_token: str = Field(..., description="JWT de refresh (7 días) — rotar en cada uso")
     token_type: str = Field(default="bearer")
+    shop_name: str | None = Field(default=None, description="Nombre del local comercial")
 
     model_config = {
         "json_schema_extra": {

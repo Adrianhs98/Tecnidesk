@@ -74,6 +74,10 @@ Cada taller tiene su propio `shop_id`. La lógica de servicios garantiza que un 
 - **Cifrado de Seguridad:** Los PINs o patrones de desbloqueo de los clientes se guardan cifrados con Fernet.
 - **Evidencias:** Soporte para registro de fotos del estado del equipo.
 - **Rastreo Público:** Endpoint especializado `/tracking/{token}` que permite a clientes ver el progreso sin necesidad de login.
+- **Asignación de Técnicos:** Asignación manual o balanceo automático de carga basado en la cantidad de tickets activos por técnico.
+
+### 👨‍🔧 Gestión de Técnicos
+- **Métricas y Especialidades:** El backend analiza dinámicamente el texto de los diagnósticos y repuestos para inferir las áreas de expertise del técnico, calculando además ingresos proxy generados por el técnico en tiempo real.
 
 ### 💬 Integración WhatsApp y Negociación
 El sistema captura el número de contacto del taller durante el registro (`contact_whatsapp`) y lo expone de manera segura en el portal de rastreo, activando un canal contextualizado para negociar y revisar presupuestos directamente con el cliente.
