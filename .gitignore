@@ -18,7 +18,6 @@ Thumbs.db
 .atl/
 .openclaw/
 .antigravity/
-context/
 contexts/
 memory/
 memories/
@@ -87,14 +86,6 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/pnpm-debug.log*
 
-# tests y experimentos frontend
-frontend/tests/
-frontend/test/
-frontend/src/**/*.test.*
-frontend/src/**/*.spec.*
-frontend/test_*
-frontend/*_test.*
-
 # ==================================
 # BACKEND
 # ==================================
@@ -131,9 +122,6 @@ backend/alembic_result*.txt
 backend/alembic_result2*.txt
 
 # tests y experimentos backend
-backend/tests/
-backend/test_*.py
-backend/*_test.py
 backend/scripts/tmp/
 backend/scripts/experimental/
 
