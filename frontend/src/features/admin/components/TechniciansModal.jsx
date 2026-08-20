@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Users, Check, Edit, Trash2 } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
+import { formatCurrency } from "../../../utils/currency";
 
 export default function TechniciansModal({ onClose }) {
   const [metrics, setMetrics] = useState(null);
@@ -103,7 +104,7 @@ export default function TechniciansModal({ onClose }) {
           </div>
           <div className="admin-stat-card" style={{ padding: "12px" }}>
             <div className="admin-stat-label">Valor Entregado</div>
-            <div className="admin-stat-value success" style={{ fontSize: "20px" }}>${Number(metrics.shop_totals.total_delivered).toFixed(2)}</div>
+            <div className="admin-stat-value success" style={{ fontSize: "20px" }}>{formatCurrency(metrics.shop_totals.total_delivered)}</div>
           </div>
         </div>
       )}
@@ -138,7 +139,7 @@ export default function TechniciansModal({ onClose }) {
                   Histórico: <strong>{tech.total_tickets}</strong>
                 </div>
                 <div style={{ fontSize: "12px", color: "var(--text2)" }}>
-                  Valor asignado: <strong>${Number(tech.attributed_value).toFixed(2)}</strong>
+                  Valor asignado: <strong>{formatCurrency(tech.attributed_value)}</strong>
                 </div>
               </div>
 

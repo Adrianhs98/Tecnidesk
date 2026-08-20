@@ -78,6 +78,7 @@ class RegisterRequest(BaseModel):
         ...,
         min_length=10,
         max_length=20,
+        pattern=r"^\d+$",
         description="WhatsApp de contacto del taller en formato internacional sin '+'. Ej: 593991234567",
     )
 

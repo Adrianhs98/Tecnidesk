@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, AlertTriangle, AlertCircle, Plus, Trash2, ClipboardList, Wrench } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
+import { formatCurrency } from "../../../utils/currency";
 
 // Opciones predefinidas de reparaciones comunes
 const QUICK_OPTIONS = [
@@ -282,12 +283,12 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>{item.description}</span>
                       <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "monospace" }}>
-                        {item.quantity}x @ ${parseFloat(item.unit_price).toFixed(2)}
+                        {item.quantity}x @ {formatCurrency(item.unit_price)}
                       </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", fontFamily: "monospace" }}>
-                        ${(parseFloat(item.unit_price) * item.quantity).toFixed(2)}
+                        {formatCurrency(parseFloat(item.unit_price) * item.quantity)}
                       </span>
                       <button
                         type="button"
@@ -311,7 +312,7 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Total presupuesto:</span>
                   <span style={{ fontSize: 16, fontWeight: 700, color: "var(--success)", fontFamily: "monospace" }}>
-                    ${totalCost.toFixed(2)}
+                    {formatCurrency(totalCost)}
                   </span>
                 </div>
               </div>
@@ -364,7 +365,7 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
                   <option value="">📦 Seleccionar desde inventario...</option>
                   {inventoryList.map(i => (
                     <option key={i.id} value={i.id} disabled={i.stock_quantity === 0}>
-                      {i.stock_quantity <= i.low_stock_alert ? "⚠️ " : ""}{i.item_name} (Stock: {i.stock_quantity}) — ${parseFloat(i.selling_price).toFixed(2)}
+                      {i.stock_quantity <= i.low_stock_alert ? "⚠️ " : ""}{i.item_name} (Stock: {i.stock_quantity}) — {formatCurrency(i.selling_price)}
                     </option>
                   ))}
                 </select>

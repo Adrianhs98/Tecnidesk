@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit2, Package, Search, AlertTriangle, ArrowUpCircle, Check, X } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
+import { formatCurrency } from "../../../utils/currency";
 
 const COMMON_SUGGESTIONS = [
   "Pin de carga USB tipo C",
@@ -447,8 +448,8 @@ export default function InventoryModal({ onClose }) {
                     {/* Middle row: Stats */}
                     <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text3)", fontFamily: "monospace", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
                       <div>Stock: <strong style={{ color: isLow ? "var(--danger)" : "var(--text1)", fontSize: 13 }}>{item.stock_quantity}</strong></div>
-                      <div>Costo: <strong style={{ color: "var(--text2)" }}>${parseFloat(item.cost_price).toFixed(2)}</strong></div>
-                      <div>Venta: <strong style={{ color: "var(--accent)" }}>${parseFloat(item.selling_price).toFixed(2)}</strong></div>
+                      <div>Costo: <strong style={{ color: "var(--text2)" }}>{formatCurrency(item.cost_price)}</strong></div>
+                      <div>Venta: <strong style={{ color: "var(--accent)" }}>{formatCurrency(item.selling_price)}</strong></div>
                       <div>Alerta: <strong>≤{item.low_stock_alert}</strong></div>
                     </div>
 

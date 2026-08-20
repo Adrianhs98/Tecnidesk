@@ -22,6 +22,7 @@ import { API_BASE } from "../../../api/config";
 import { STATUS_CONFIG, ADMIN_STATUSES } from "../../../utils/constants";
 import { formatDate, formatOnlyDate } from "../../../utils/date";
 import { maskPhone, maskEmail, maskTrackingCode } from "../../../utils/privacy";
+import { formatCurrency } from "../../../utils/currency";
 import PartsSelector from "./PartsSelector";
 
 const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
@@ -511,7 +512,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
               }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)" }}>Costo Total:</span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: "var(--success)", fontFamily: "monospace" }}>
-                  ${parseFloat(ticket.total_cost || 0).toFixed(2)}
+                  {formatCurrency(ticket.total_cost || 0)}
                 </span>
               </div>
             </div>
