@@ -1,6 +1,7 @@
 # Entorno / virtualenv
 .env
-.env*
+.env.*
+!.env.example
 venv/
 env/
 .venv/
@@ -13,9 +14,6 @@ __pycache__/
 .pytest_cache/
 
 # Scripts de pruebas / experimentos
-test_*.py
-*_test.py
-tests/
 scripts/tmp/
 scripts/experimental/
 scratch/

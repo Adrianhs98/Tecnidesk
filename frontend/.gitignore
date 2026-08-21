@@ -32,12 +32,6 @@ Thumbs.db
 .eslintcache
 
 # Testing / experimental
-test/
-tests/
-src/**/*.test.*
-src/**/*.spec.*
-test_*
-*_test.*
 playground/
 sandbox/
 scratch/
