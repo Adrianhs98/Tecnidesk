@@ -104,6 +104,7 @@ from app.schemas.pagination import PaginatedResponse
 )
 async def list_tickets(
     ticket_status: TicketStatusEnum | None = Query(None, description="Filtra por estado exacto (ej. Recibido)"),
+    filter_group: str | None = Query(None, description="Filtro agrupado ('activos')"),
     search: str | None = Query(None, description="Término de búsqueda general"),
     date_range: str | None = Query(None, description="Filtra por fecha, ej. 2026-01-01,2026-01-31"),
     skip: int = Query(0, ge=0),
@@ -117,6 +118,7 @@ async def list_tickets(
         skip=skip,
         limit=limit,
         status=ticket_status,
+        filter_group=filter_group,
         search=search,
         date_range=date_range
     )

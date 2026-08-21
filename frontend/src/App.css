@@ -821,10 +821,29 @@ body {
 }
 
 .admin-stat-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  user-select: none;
+  text-align: left;
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 16px;
   padding: 18px 20px;
+}
+
+.admin-stat-card:hover {
+  border-color: var(--accent);
+  background: var(--surface2);
+}
+
+.admin-stat-card:active {
+  transform: scale(0.98);
+}
+
+.admin-stat-card.is-active {
+  border-color: var(--accent);
+  background: rgba(201, 167, 106, 0.08);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .admin-stat-label {
@@ -857,6 +876,91 @@ body {
 
 .admin-stat-value.warning {
   color: var(--warning);
+}
+
+/* Exception Badges */
+.badge-exception {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.badge-warning {
+  background: rgba(204, 143, 90, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(204, 143, 90, 0.3);
+}
+
+.badge-danger {
+  background: rgba(157, 92, 82, 0.12);
+  color: var(--danger);
+  border: 1px solid rgba(157, 92, 82, 0.3);
+}
+
+.badge-muted {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text3);
+  border: 1px solid var(--border);
+}
+
+.badge-success {
+  background: rgba(78, 159, 125, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(78, 159, 125, 0.3);
+}
+
+.badge-amber {
+  background: rgba(201, 167, 106, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(201, 167, 106, 0.3);
+}
+
+/* Smart Action Buttons */
+.btn-smart-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-smart-warning {
+  background: var(--warning);
+  color: #111;
+  border: 1px solid var(--warning);
+}
+
+.btn-smart-accent {
+  background: var(--accent);
+  color: #111;
+  border: 1px solid var(--accent);
+}
+
+.btn-smart-success {
+  background: rgba(37, 211, 102, 0.15);
+  color: var(--whatsapp);
+  border: 1px solid rgba(37, 211, 102, 0.3);
+}
+
+.btn-smart-amber {
+  background: rgba(201, 167, 106, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(201, 167, 106, 0.3);
+}
+
+.btn-smart-secondary {
+  background: var(--surface2);
+  color: var(--text1);
+  border: 1px solid var(--border);
 }
 
 .admin-section-header {

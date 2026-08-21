@@ -1,15 +1,28 @@
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.main import app
-from app.database import get_db, engine as prod_engine
+from app.database import get_db
+from app.config import get_settings
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def db_engine():
-    """Fixture to provide the SQLAlchemy engine."""
-    yield prod_engine
+    """Fixture to provide the SQLAlchemy engine with NullPool."""
+    settings = get_settings()
+    engine = create_async_engine(
+        settings.db_url,
+        poolclass=NullPool,
+        connect_args={
+            "server_settings": {"jit": "off"},
+            "prepared_statement_cache_size": 0,
+            "statement_cache_size": 0,
+        }
+    )
+    yield engine
+    await engine.dispose()
 
 @pytest_asyncio.fixture
 async def db_session(db_engine):

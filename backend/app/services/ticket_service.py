@@ -13,6 +13,7 @@ MULTI-TENANT:
 """
 from __future__ import annotations
 
+import datetime
 import json
 import uuid
 from decimal import Decimal
@@ -562,6 +563,7 @@ async def list_tickets(
     skip: int = 0,
     limit: int = 50,
     status: TicketStatusEnum | None = None,
+    filter_group: str | None = None,
     search: str | None = None,
     date_range: str | None = None
 ) -> tuple[list[Ticket], int]:
@@ -579,6 +581,12 @@ async def list_tickets(
 
     if status is not None:
         stmt = stmt.where(Ticket.status == status)
+    elif filter_group == "activos":
+        estados_inactivos = [
+            TicketStatusEnum.LISTO_PARA_RETIRAR,
+            TicketStatusEnum.NO_APROBADO,
+        ]
+        stmt = stmt.where(Ticket.status.not_in(estados_inactivos))
     
     if search:
         search_term = f"%{search}%"
@@ -599,10 +607,9 @@ async def list_tickets(
         # Assuming date_range is like 'YYYY-MM-DD,YYYY-MM-DD'
         parts = date_range.split(',')
         if len(parts) == 2:
-            from datetime import datetime
             try:
-                start_date = datetime.strptime(parts[0], '%Y-%m-%d')
-                end_date = datetime.strptime(parts[1], '%Y-%m-%d')
+                start_date = datetime.datetime.strptime(parts[0], '%Y-%m-%d')
+                end_date = datetime.datetime.strptime(parts[1], '%Y-%m-%d')
                 stmt = stmt.where(Ticket.created_at >= start_date, Ticket.created_at <= end_date)
             except ValueError:
                 pass
@@ -611,7 +618,11 @@ async def list_tickets(
     total_result = await db.execute(total_query)
     total = total_result.scalar_one_or_none() or 0
 
-    stmt = stmt.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
+    stmt = stmt.order_by(
+        case((Ticket.technician_id.is_(None), 0), else_=1),
+        case((Ticket.created_at < func.now() - datetime.timedelta(hours=72), 0), else_=1),
+        Ticket.created_at.desc()
+    ).offset(skip).limit(limit)
 
     result = await db.execute(stmt)
     tickets = list(result.scalars().all())

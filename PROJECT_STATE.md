@@ -153,6 +153,16 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
 *   **Diagnóstico Asistido con Razonamiento Explicable y RAG Híbrido (20 de Agosto, 2026 - En Progreso):**
     *   *Fase 1 Completada (Infraestructura Base & Embeddings Locales):* Se habilitó la extensión `vector` (pgvector) y se crearon las tablas `diagnostic_cases`, `diagnostic_conversations`, `diagnostic_messages` y `diagnostic_query_log` con índices HNSW (`vector_cosine_ops`, 768 dims). Se implementó el servicio de embeddings (`EmbeddingService`) conectado a Ollama local (`nomic-embed-text-v2-moe:latest`) vía Tailscale Funnel con prefijos de tarea (`search_document: ` / `search_query: `) y truncamiento seguro a <512 tokens. Se definieron las excepciones (`EmbeddingServiceUnavailableError` -> HTTP 503) y scripts de backup automatizado con `pg_dump`. 23/23 tests pasando en `pytest`.
     *   *Siguientes Fases:* Fase 2 (Datos Sintéticos & Retrieval), Fase 3 (Razonamiento Explicable con Gemini 3.7 Flash), Fase 4 (Chat de Corrección Human-in-the-Loop) y Fase 5 (Integración Frontend & Métrica de Madurez).
+*   **Workbench Operativo Mínimo (Fase 1 y 1.1 completadas) (21 de Agosto, 2026):**
+    *   *Optimización y N+1:* Se eliminó la petición a `/evidences` al montar tarjetas, cargando la galería on-demand al abrir el modal.
+    *   *Señales Operativas (UI):* Rediseño del `AdminTicketCard` ocultando información pasiva y destacando urgencias (badges `Sin técnico`, `Vencido`, `Listo p/ retiro`).
+    *   *Smart Action CTA:* Un botón contextual de prioridad estricta (*Asignar* -> *Diagnosticar* -> *WhatsApp* -> *Ver detalle*) para guiar al técnico en la próxima acción necesaria.
+    *   *Filtros y KPIs:* Los 4 indicadores del Dashboard ahora funcionan como filtros asíncronos combinados con paginación optimizada.
+    *   *Ordenamiento Inteligente (Backend):* Refactor de `list_tickets` integrando un `CASE` (SQL) que fuerza al tope de la lista los equipos sin técnico (`technician_id IS NULL`), luego los vencidos (`>72h`), y finalmente por orden cronológico. 100% test coverage y baseline métrico extraído (evidenciando un backlog crítico pre-lanzamiento del 79% sin técnico).
 
 ### 6.2 Deuda Técnica y Pendientes Críticos
 *   **FASE 4 (Vulnerabilidad IDOR en Activación):** Resuelta previamente con `superadmin_key_guard`.
+*   **Workbench Operativo (Fase 2 PENDIENTE):**
+    *   *SLA Dinámico:* Reemplazar regla estática (`created_at > 72h`) por tiempo relativo al `last_status_changed_at` (requiere tabla de historial de transiciones de estado).
+    *   *Técnico Obligatorio:* Bloqueo estricto para evitar equipos huérfanos.
+    *   *Tests Combinatorios:* Validar las múltiples combinaciones del orden inteligente (e.g. *Sin técnico + No vencido* vs *Con técnico + Vencido*).
