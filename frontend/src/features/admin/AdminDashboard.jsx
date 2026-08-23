@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback, useRef, useMemo, Suspense, lazy, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Info, Users } from "lucide-react";
+import { Info, Users, List, LayoutGrid, Sliders, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
+import { fetchSlaConfig } from "../../api/shop";
 import AdminTicketCard from "./components/AdminTicketCard";
+import KanbanBoard from "./components/KanbanBoard";
 import ThemeToggle from "../../components/shared/ThemeToggle";
 
 const TicketSuccessModal = lazy(() => import("../../components/shared/TicketSuccessModal"));
 const NewTicketModal = lazy(() => import("./components/NewTicketModal"));
 const InventoryModal = lazy(() => import("./components/InventoryModal"));
 const TechniciansModal = lazy(() => import("./components/TechniciansModal"));
+const SlaSettingsModal = lazy(() => import("./components/SlaSettingsModal"));
+const CycleTimeAnalyticsModal = lazy(() => import("./components/CycleTimeAnalyticsModal"));
 
 // Estados que NO cuentan como "activos en taller"
 const ESTADOS_INACTIVOS = ["LISTO_PARA_RETIRAR", "NO_APROBADO"];
@@ -92,12 +96,37 @@ export default function AdminDashboard() {
     }
   }
 
+  const { data: slaConfigData } = useQuery({
+    queryKey: ['shopSlaConfig'],
+    queryFn: fetchSlaConfig,
+    staleTime: 1000 * 60 * 10,
+  });
+  const slaThresholds = slaConfigData?.effective_thresholds || null;
+
   const [showModal, setShowModal] = useState(false);
+  const [showSlaSettings, setShowSlaSettings] = useState(false);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [createdTicket, setCreatedTicket] = useState(null);
   const [isPending, startTransition] = useTransition();
   const [exactDate, setExactDate] = useState("");
   const [showInventory, setShowInventory] = useState(false);
   const [showTechnicians, setShowTechnicians] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem("tecnidesk_workbench_view") || "list";
+    } catch {
+      return "list";
+    }
+  });
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("tecnidesk_workbench_view", mode);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleLogout = () => {
     window.dispatchEvent(new Event("auth:logout"));
@@ -176,10 +205,16 @@ export default function AdminDashboard() {
           <img src="/logo.png" alt="Logo" onError={(e) => { e.target.style.display = "none"; }} width={24} height={24} className="workbench-logo" />
           <div className="admin-logo-dot" />
           <div>
-            <span className="admin-title">TecniDesk Admin</span>
+            <span className="admin-title">{sessionStorage.getItem("td_shop") || "TecniDesk Admin"}</span>
           </div>
         </div>
         <div className="nav-pill-actions">
+          <button className="btn-secondary" onClick={() => setShowAnalyticsModal(true)}>
+            <BarChart3 size={16} className="inline-icon" /> Métricas y Tiempos
+          </button>
+          <button className="btn-secondary" onClick={() => setShowSlaSettings(true)}>
+            <Sliders size={16} className="inline-icon" /> Configurar SLAs
+          </button>
           <button className="btn-secondary" onClick={() => setShowTechnicians(true)}>
             <Users size={16} className="inline-icon" /> Técnicos
           </button>
@@ -253,6 +288,28 @@ export default function AdminDashboard() {
             />
           </div>
           <div className="workbench-toolbar-filters">
+            <div className="view-mode-toggle" role="group" aria-label="Modo de vista">
+              <button
+                type="button"
+                className={`view-mode-btn ${viewMode === "list" ? "is-active" : ""}`}
+                onClick={() => handleViewModeChange("list")}
+                aria-label="Vista Lista"
+                title="Vista Lista"
+              >
+                <List size={14} />
+                <span>Lista</span>
+              </button>
+              <button
+                type="button"
+                className={`view-mode-btn ${viewMode === "kanban" ? "is-active" : ""}`}
+                onClick={() => handleViewModeChange("kanban")}
+                aria-label="Vista Tablero Kanban"
+                title="Vista Tablero Kanban"
+              >
+                <LayoutGrid size={14} />
+                <span>Tablero</span>
+              </button>
+            </div>
 
             <input 
               type="date" 
@@ -381,11 +438,15 @@ export default function AdminDashboard() {
 
         {!loading && filteredTickets.length > 0 && (
           <div className="workbench-content">
-            <div className="tickets-grid">
-              {filteredTickets.map((ticket) => (
-                <AdminTicketCard key={ticket.id} ticket={ticket} onStatusChange={handleStatusChange} />
-              ))}
-            </div>
+            {viewMode === "kanban" ? (
+              <KanbanBoard tickets={filteredTickets} onStatusChange={handleStatusChange} slaThresholds={slaThresholds} />
+            ) : (
+              <div className="tickets-grid">
+                {filteredTickets.map((ticket) => (
+                  <AdminTicketCard key={ticket.id} ticket={ticket} onStatusChange={handleStatusChange} slaThresholds={slaThresholds} />
+                ))}
+              </div>
+            )}
             <div className="workbench-pagination">
               <button 
                 className="btn-secondary" 
@@ -397,6 +458,21 @@ export default function AdminDashboard() {
               <span className="workbench-pagination-text">
                 Página {page + 1} de {Math.max(1, Math.ceil(totalItems / limit))} ({totalItems} totales)
               </span>
+              <select
+                className="form-input"
+                style={{ width: "auto", display: "inline-block", margin: "0 10px" }}
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(0);
+                }}
+                title="Límite por página"
+              >
+                <option value={10}>10 / pág</option>
+                <option value={15}>15 / pág</option>
+                <option value={20}>20 / pág</option>
+                <option value={50}>50 / pág</option>
+              </select>
               <button 
                 className="btn-secondary" 
                 disabled={(page + 1) * limit >= totalItems} 
@@ -411,6 +487,8 @@ export default function AdminDashboard() {
 
       <Suspense fallback={<div className="modal-overlay"><div className="spinner" /></div>}>
         {showModal && <NewTicketModal onClose={() => setShowModal(false)} onCreated={handleTicketCreated} />}
+        {showAnalyticsModal && <CycleTimeAnalyticsModal onClose={() => setShowAnalyticsModal(false)} />}
+        {showSlaSettings && <SlaSettingsModal onClose={() => setShowSlaSettings(false)} />}
         {showInventory && <InventoryModal onClose={() => setShowInventory(false)} />}
         {showTechnicians && <TechniciansModal onClose={() => setShowTechnicians(false)} />}
         {createdTicket && <TicketSuccessModal ticket={createdTicket} onClose={() => setCreatedTicket(null)} />}

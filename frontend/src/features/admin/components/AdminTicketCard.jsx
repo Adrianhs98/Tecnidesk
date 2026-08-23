@@ -29,7 +29,7 @@ import PartsSelector from "./PartsSelector";
 
 const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
 
-export default function AdminTicketCard({ ticket, onStatusChange }) {
+export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds = null }) {
   const cfg = STATUS_CONFIG[ticket.status] || { label: ticket.status, color: "var(--accent)", icon: "📋" };
   const [selectedStatus, setSelectedStatus] = useState(ticket.status);
   const [saving, setSaving] = useState(false);
@@ -147,10 +147,14 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
         method: "PATCH",
         body: JSON.stringify({ status: selectedStatus }),
       });
-      if (!res.ok) throw new Error(`Error ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Error ${res.status}`);
+      }
       const updated = await res.json();
       onStatusChange(updated);
-    } catch {
+    } catch (err) {
+      alert(err.message || "Error al actualizar estado");
       setSelectedStatus(ticket.status);
     } finally {
       setSaving(false);
@@ -242,7 +246,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
       );
     }
 
-    if (isTicketStale(ticket.created_at, ticket.status)) {
+    if (isTicketStale(ticket.updated_at || ticket.created_at, ticket.status, slaThresholds)) {
       badges.push(
         <span key="stale" className="badge-exception badge-danger">
           <Clock size={12} /> Vencido
@@ -377,7 +381,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
       </div>
 
       {/* SIGNALS / EXCEPTION BADGES */}
-      <div className="ticket-card-signals" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "10px 0 14px" }}>
+      <div className="ticket-card-signals" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "10px 0 14px", padding: "0 20px" }}>
         <span style={{ color: ticket.technician ? "var(--text2)" : "var(--warning)", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
           <Wrench size={13} /> {ticket.technician?.full_name || "Sin técnico"}
         </span>

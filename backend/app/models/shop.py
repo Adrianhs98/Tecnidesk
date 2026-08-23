@@ -4,7 +4,7 @@ Modelo: shops — Talleres de reparación (clientes del SaaS).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import DateTime, Enum, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDMixin
@@ -25,6 +25,9 @@ class Shop(UUIDMixin, Base):
 
     # Logo opcional del taller (Whitelabel)
     logo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Configuración de SLAs por estado en formato JSON
+    sla_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
 
     # Contacto del taller (MVP)
     contact_email: Mapped[str] = mapped_column(String(254), nullable=False)

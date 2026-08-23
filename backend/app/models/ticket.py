@@ -107,6 +107,9 @@ class Ticket(UUIDMixin, TimestampMixin, Base):
     webhook_logs: Mapped[list["WebhookLog"]] = relationship(  # noqa: F821
         "WebhookLog", back_populates="ticket", cascade="all, delete-orphan"
     )
+    status_history: Mapped[list["TicketStatusHistory"]] = relationship(  # noqa: F821
+        "TicketStatusHistory", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketStatusHistory.changed_at.asc()"
+    )
 
     def __repr__(self) -> str:
         return f"<Ticket id={self.id} status={self.status}>"

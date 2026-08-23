@@ -3,6 +3,7 @@ import { X, AlertTriangle, AlertCircle, Plus, Trash2, ClipboardList, Wrench } fr
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
 import { formatCurrency } from "../../../utils/currency";
+import DiagnosticAssistPanel from "./DiagnosticAssistPanel";
 
 // Opciones predefinidas de reparaciones comunes
 const QUICK_OPTIONS = [
@@ -237,6 +238,11 @@ export default function DiagnosticModal({ ticketId, ticket, onClose, onSuccess }
 
         {/* Body */}
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+          
+          <DiagnosticAssistPanel 
+            ticketId={ticketId} 
+            onApplyAssist={(notes) => setDiagNotes(notes)} 
+          />
 
           {/* Sección 1: Diagnóstico */}
           <div>

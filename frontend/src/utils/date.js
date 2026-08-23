@@ -55,20 +55,34 @@ export function formatRelativeAge(iso) {
   return formatOnlyDate(iso);
 }
 
+export const SLA_THRESHOLDS_HOURS = {
+  EN_ESPERA_INGRESO: 48,
+  EN_REVISION: 24,
+  EN_REPARACION: 48,
+  ESPERANDO_APROBACION: null,  // Pausado (espera de cliente)
+  ESPERANDO_REPUESTO: null,    // Pausado (espera de proveedor)
+  LISTO_PARA_RETIRAR: null,    // Listo para retiro
+  NO_APROBADO: null,           // Terminal
+  ENTREGADO: null,             // Terminal legacy
+};
+
 /**
- * Determines if a ticket is stale/overdue (>72 hours in active status).
- * @param {string|Date} iso - Timestamp ISO
+ * Determines if a ticket is stale/overdue based on dynamic SLA thresholds per status.
+ * @param {string|Date} iso - Timestamp ISO (updated_at or created_at)
  * @param {string} status - Current ticket status
+ * @param {Object|null} customThresholds - Optional tenant-specific SLA threshold map
  * @returns {boolean}
  */
-export function isTicketStale(iso, status) {
-  if (!iso) return false;
-  if (["LISTO_PARA_RETIRAR", "NO_APROBADO", "ENTREGADO"].includes(status)) {
+export function isTicketStale(iso, status, customThresholds = null) {
+  if (!iso || !status) return false;
+  const threshold = customThresholds?.[status] ?? SLA_THRESHOLDS_HOURS[status];
+  if (threshold === null || threshold === undefined) {
     return false;
   }
   const date = new Date(iso);
   if (isNaN(date.getTime())) return false;
   const now = new Date();
   const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-  return diffHours >= 72;
+  return diffHours >= threshold;
 }
+

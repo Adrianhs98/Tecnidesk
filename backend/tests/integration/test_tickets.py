@@ -89,3 +89,136 @@ async def test_get_tickets_filter_group_activos_integration(client, db_session):
         assert "EN_REVISION" in statuses
     finally:
         app.dependency_overrides.pop(subscription_guard, None)
+
+
+@pytest.mark.asyncio
+async def test_patch_ticket_status_unassigned_en_reparacion_returns_400(client, db_session):
+    shop_id = uuid.uuid4()
+    shop = Shop(
+        id=shop_id,
+        business_name="Guard Shop",
+        owner_name="Owner",
+        subdomain=f"guard-{uuid.uuid4().hex[:8]}",
+        contact_email="guard@test.com",
+        contact_whatsapp="593999999999",
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(shop)
+
+    user = User(
+        shop_id=shop_id,
+        role=UserRoleEnum.admin,
+        full_name="Admin",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="fakehash",
+        is_active=True,
+    )
+    db_session.add(user)
+
+    customer = Customer(
+        shop_id=shop_id,
+        full_name="Cliente Guard",
+        phone_number="593987654321",
+        email="clienteguard@test.com",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+
+    ticket = Ticket(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        device_brand="Sony",
+        device_model="PlayStation 5",
+        issue_description="No da video",
+        status=TicketStatusEnum.EN_REVISION,
+        technician_id=None,
+        tracking_token=str(uuid.uuid4()),
+    )
+    db_session.add(ticket)
+    await db_session.flush()
+
+    app.dependency_overrides[subscription_guard] = lambda: user
+
+    try:
+        res = await client.patch(
+            f"/tickets/{ticket.id}/status",
+            json={"status": "EN_REPARACION"},
+        )
+        assert res.status_code == 400
+        data = res.json()
+        assert data["detail"] == "Debe asignar un técnico responsable antes de iniciar la reparación."
+    finally:
+        app.dependency_overrides.pop(subscription_guard, None)
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_detail_includes_status_history(client, db_session):
+    shop_id = uuid.uuid4()
+    shop = Shop(
+        id=shop_id,
+        business_name="History Shop",
+        owner_name="Owner",
+        subdomain=f"history-{uuid.uuid4().hex[:8]}",
+        contact_email="history@test.com",
+        contact_whatsapp="593999999999",
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(shop)
+
+    user = User(
+        shop_id=shop_id,
+        role=UserRoleEnum.admin,
+        full_name="Admin",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="fakehash",
+        is_active=True,
+    )
+    db_session.add(user)
+
+    customer = Customer(
+        shop_id=shop_id,
+        full_name="Cliente History",
+        phone_number="593987654321",
+        email="clientehistory@test.com",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+
+    ticket = Ticket(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        device_brand="Apple",
+        device_model="iPad Pro",
+        issue_description="Batería degradada",
+        status=TicketStatusEnum.EN_ESPERA_INGRESO,
+        technician_id=None,
+        tracking_token=str(uuid.uuid4()),
+    )
+    db_session.add(ticket)
+    await db_session.flush()
+
+    app.dependency_overrides[subscription_guard] = lambda: user
+
+    try:
+        # 1. Update status to EN_REVISION
+        patch_res = await client.patch(
+            f"/tickets/{ticket.id}/status",
+            json={"status": "EN_REVISION"},
+        )
+        assert patch_res.status_code == 200
+
+        # 2. Get ticket detail
+        get_res = await client.get(f"/tickets/{ticket.id}")
+        assert get_res.status_code == 200
+        detail_data = get_res.json()
+
+        assert "status_history" in detail_data
+        assert isinstance(detail_data["status_history"], list)
+        assert len(detail_data["status_history"]) >= 1
+
+        latest_history = detail_data["status_history"][-1]
+        assert latest_history["from_status"] == "EN_ESPERA_INGRESO"
+        assert latest_history["to_status"] == "EN_REVISION"
+        assert latest_history["changed_by_user_id"] == str(user.id)
+    finally:
+        app.dependency_overrides.pop(subscription_guard, None)

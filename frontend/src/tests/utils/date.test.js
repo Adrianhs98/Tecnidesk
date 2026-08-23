@@ -89,28 +89,59 @@ describe('Date Utilities', () => {
       expect(isTicketStale('', 'EN_REVISION')).toBe(false);
     });
 
-    it('returns false for closed or inactive statuses even if older than 72h', () => {
+    it('returns false for closed, terminal or paused statuses even if older than 72h', () => {
       const fourDaysAgo = new Date('2026-08-17T10:00:00.000Z').toISOString();
       expect(isTicketStale(fourDaysAgo, 'LISTO_PARA_RETIRAR')).toBe(false);
       expect(isTicketStale(fourDaysAgo, 'NO_APROBADO')).toBe(false);
       expect(isTicketStale(fourDaysAgo, 'ENTREGADO')).toBe(false);
+      expect(isTicketStale(fourDaysAgo, 'ESPERANDO_APROBACION')).toBe(false);
+      expect(isTicketStale(fourDaysAgo, 'ESPERANDO_REPUESTO')).toBe(false);
     });
 
-    it('returns false for active tickets created less than 72 hours ago', () => {
-      const oneDayAgo = new Date('2026-08-20T16:00:00.000Z').toISOString();
-      expect(isTicketStale(oneDayAgo, 'EN_REVISION')).toBe(false);
+    it('evaluates dynamic status SLAs correctly (24h for EN_REVISION, 48h for EN_ESPERA_INGRESO and EN_REPARACION)', () => {
+      // 20 hours ago -> false for all (including EN_REVISION)
+      const twentyHoursAgo = new Date('2026-08-20T20:00:00.000Z').toISOString();
+      expect(isTicketStale(twentyHoursAgo, 'EN_REVISION')).toBe(false);
+      expect(isTicketStale(twentyHoursAgo, 'EN_ESPERA_INGRESO')).toBe(false);
+      expect(isTicketStale(twentyHoursAgo, 'EN_REPARACION')).toBe(false);
 
-      const twoDaysAgo = new Date('2026-08-19T17:00:00.000Z').toISOString(); // 47 hours
-      expect(isTicketStale(twoDaysAgo, 'EN_REPARACION')).toBe(false);
+      // 25 hours ago -> true for EN_REVISION (>=24h), false for EN_ESPERA_INGRESO / EN_REPARACION (<48h)
+      const twentyFiveHoursAgo = new Date('2026-08-20T15:00:00.000Z').toISOString();
+      expect(isTicketStale(twentyFiveHoursAgo, 'EN_REVISION')).toBe(true);
+      expect(isTicketStale(twentyFiveHoursAgo, 'EN_ESPERA_INGRESO')).toBe(false);
+      expect(isTicketStale(twentyFiveHoursAgo, 'EN_REPARACION')).toBe(false);
+
+      // 50 hours ago -> true for EN_ESPERA_INGRESO and EN_REPARACION (>=48h)
+      const fiftyHoursAgo = new Date('2026-08-19T14:00:00.000Z').toISOString();
+      expect(isTicketStale(fiftyHoursAgo, 'EN_ESPERA_INGRESO')).toBe(true);
+      expect(isTicketStale(fiftyHoursAgo, 'EN_REPARACION')).toBe(true);
     });
 
-    it('returns true for active tickets created 72 or more hours ago', () => {
-      const exactly72HoursAgo = new Date('2026-08-18T16:00:00.000Z').toISOString();
-      expect(isTicketStale(exactly72HoursAgo, 'EN_REVISION')).toBe(true);
+    it('respects custom workshop threshold overrides when provided', () => {
+      const customThresholds = {
+        EN_REVISION: 12,       // Express repair workshop (shorter)
+        EN_REPARACION: 72,     // Micro-soldering workshop (longer)
+      };
 
-      const fourDaysAgo = new Date('2026-08-17T12:00:00.000Z').toISOString();
-      expect(isTicketStale(fourDaysAgo, 'EN_ESPERA_INGRESO')).toBe(true);
-      expect(isTicketStale(fourDaysAgo, 'ESPERANDO_APROBACION')).toBe(true);
+      // 15 hours ago:
+      // - Defaults: EN_REVISION (24h) -> false
+      // - Custom: EN_REVISION (12h) -> true (15h >= 12h)
+      const fifteenHoursAgo = new Date('2026-08-21T01:00:00.000Z').toISOString();
+      expect(isTicketStale(fifteenHoursAgo, 'EN_REVISION')).toBe(false);
+      expect(isTicketStale(fifteenHoursAgo, 'EN_REVISION', customThresholds)).toBe(true);
+
+      // 50 hours ago:
+      // - Defaults: EN_REPARACION (48h) -> true (50h >= 48h)
+      // - Custom: EN_REPARACION (72h) -> false (50h < 72h)
+      const fiftyHoursAgo = new Date('2026-08-19T14:00:00.000Z').toISOString();
+      expect(isTicketStale(fiftyHoursAgo, 'EN_REPARACION')).toBe(true);
+      expect(isTicketStale(fiftyHoursAgo, 'EN_REPARACION', customThresholds)).toBe(false);
+
+      // Unconfigured status in customThresholds (e.g. EN_ESPERA_INGRESO) falls back to default 48h
+      expect(isTicketStale(fiftyHoursAgo, 'EN_ESPERA_INGRESO', customThresholds)).toBe(true);
+      const thirtyHoursAgo = new Date('2026-08-20T10:00:00.000Z').toISOString();
+      expect(isTicketStale(thirtyHoursAgo, 'EN_ESPERA_INGRESO', customThresholds)).toBe(false);
     });
   });
 });
+

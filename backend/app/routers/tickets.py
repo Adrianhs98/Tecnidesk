@@ -38,6 +38,7 @@ from app.schemas.ticket import (
     TicketStatsResponse,
     TicketStatusUpdateIn,
     TicketUpdate,
+    CycleTimeAnalyticsResponse,
 )
 from app.services import ticket_service
 from app.services.ticket_service import (
@@ -45,6 +46,7 @@ from app.services.ticket_service import (
     InvalidTechnicianRole,
     TechnicianNotInShop,
     TicketNotFound,
+    UnassignedTechnicianError,
 )
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
@@ -147,7 +149,29 @@ async def get_ticket_stats(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4. GET /tickets/{ticket_id}
+# 4. GET /tickets/analytics/cycle-times  ← DEBE ir ANTES de /{ticket_id}
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/analytics/cycle-times",
+    response_model=CycleTimeAnalyticsResponse,
+    summary="Métricas de Cycle Time, Lead Time y Cuellos de Botella",
+    description="Calcula tiempos promedio de ciclo, lead time, desglose por etapa, cuellos de botella y tasa de cumplimiento SLA.",
+)
+async def get_cycle_time_analytics(
+    days: int = Query(30, ge=1, le=365, description="Ventana de tiempo en días"),
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ticket_service.get_workshop_cycle_time_metrics(
+        db=db,
+        shop_id=current_user.shop_id,
+        days=days,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. GET /tickets/{ticket_id}
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get(
@@ -195,10 +219,15 @@ async def update_ticket_status(
             ticket_id=ticket_id,
             shop_id=current_user.shop_id,
             new_status=payload.status,
+            changed_by_user_id=current_user.id,
         )
     except TicketNotFound as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from e
+    except UnassignedTechnicianError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         ) from e
 
 
@@ -471,3 +500,162 @@ async def activate_shop(
         "shop_id": payload.shop_id,
         "ends_at": ends_at
     }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 11. POST /tickets/{ticket_id}/diagnose
+# ═════════════════════════════════════════════════════════════════════════════
+from app.schemas.diagnostic import DiagnosticResponse
+from app.services.diagnostic_service import search_similar_cases
+from app.services.explanation_service import ExplanationService
+from app.models.diagnostic import DiagnosticQueryLog
+
+@router.post(
+    "/{ticket_id}/diagnose",
+    response_model=DiagnosticResponse,
+    summary="Generar diagnóstico asistido por IA",
+    description="Realiza búsqueda de casos similares (RAG) y genera explicación justificada.",
+)
+async def diagnose_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        # Get ticket for context
+        ticket = await ticket_service.get_ticket_by_id(
+            db=db,
+            ticket_id=ticket_id,
+            shop_id=current_user.shop_id,
+        )
+        
+        # Retrieval
+        search_result = await search_similar_cases(
+            db=db,
+            shop_id=current_user.shop_id,
+            device_brand=ticket.device_brand,
+            device_model=ticket.device_model,
+            symptom_text=ticket.issue_description,
+            ticket_id=ticket_id
+        )
+        
+        # We need the DiagnosticCase objects, not RetrievedCase
+        # Wait, the prompt for build_prompt needs DiagnosticCase.
+        # Let's map RetrievedCase back to a struct that ExplanationService expects.
+        class SimpleCase:
+            def __init__(self, id, device_brand, device_model, symptom_text, diagnosed_cause, solution_applied, source_type):
+                self.id = id
+                self.device_brand = device_brand
+                self.device_model = device_model
+                self.symptom_text = symptom_text
+                self.diagnosed_cause = diagnosed_cause
+                self.solution_applied = solution_applied
+                self.source_type = source_type
+                
+        cases_for_llm = [
+            SimpleCase(
+                id=c.case_id,
+                device_brand=c.device_brand,
+                device_model=c.device_model,
+                symptom_text=c.symptom_text,
+                diagnosed_cause=c.diagnosed_cause,
+                solution_applied=c.solution_applied,
+                source_type=c.source_type
+            ) for c in search_result.cases
+        ]
+        
+        symptom_context = f"Brand: {ticket.device_brand} | Model: {ticket.device_model} | Symptom: {ticket.issue_description}"
+        
+        best_distance = search_result.cases[0].cosine_distance if search_result.cases else 1.0
+        
+        # Generation
+        diagnosis = await ExplanationService.generate_explanation(
+            symptom=symptom_context,
+            retrieved_cases=cases_for_llm,
+            best_distance=best_distance
+        )
+        
+        # If generation failed verify, update the log that was just created
+        if not diagnosis.had_sufficient_evidence and search_result.had_sufficient_evidence:
+            # The search logged sufficient = True, but LLM failed to verify
+            # We can update the last log for this ticket
+            stmt = select(DiagnosticQueryLog).where(
+                DiagnosticQueryLog.ticket_id == ticket_id
+            ).order_by(DiagnosticQueryLog.created_at.desc()).limit(1)
+            result = await db.execute(stmt)
+            log_entry = result.scalar_one_or_none()
+            if log_entry:
+                log_entry.had_sufficient_evidence = False
+                db.add(log_entry)
+        
+        await db.commit()
+        return diagnosis
+
+    except TicketNotFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from e
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 12. POST /tickets/{ticket_id}/diagnostic-chat
+# ═════════════════════════════════════════════════════════════════════════════
+from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
+from app.services.correction_service import CorrectionService
+
+@router.post(
+    "/{ticket_id}/diagnostic-chat",
+    response_model=DiagnosticMessageResponse,
+    summary="Chat con el asistente sobre el diagnóstico",
+    description="Agrega un mensaje del técnico y retorna la respuesta del asistente.",
+)
+async def diagnostic_chat(
+    ticket_id: uuid.UUID,
+    payload: DiagnosticMessageIn,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        # Check ticket exists
+        ticket = await ticket_service.get_ticket_by_id(
+            db=db, ticket_id=ticket_id, shop_id=current_user.shop_id
+        )
+        return await CorrectionService.handle_chat_message(
+            db=db,
+            shop_id=current_user.shop_id,
+            technician_id=current_user.id,
+            ticket_id=ticket_id,
+            message_in=payload
+        )
+    except TicketNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 13. POST /tickets/{ticket_id}/diagnostic-chat/confirm
+# ═════════════════════════════════════════════════════════════════════════════
+@router.post(
+    "/{ticket_id}/diagnostic-chat/confirm",
+    response_model=DiagnosticCaseResponse,
+    summary="Confirmar corrección de diagnóstico",
+    description="Finaliza la conversación y guarda la causa/solución como real_validated.",
+)
+async def diagnostic_chat_confirm(
+    ticket_id: uuid.UUID,
+    payload: ConfirmCorrectionIn,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        ticket = await ticket_service.get_ticket_by_id(
+            db=db, ticket_id=ticket_id, shop_id=current_user.shop_id
+        )
+        return await CorrectionService.confirm_correction(
+            db=db,
+            shop_id=current_user.shop_id,
+            technician_id=current_user.id,
+            ticket_id=ticket_id,
+            confirm_in=payload
+        )
+    except TicketNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

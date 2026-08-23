@@ -84,8 +84,8 @@ tailscale up
 Expose Ollama's default port (11434) securely:
 
 ```bash
-# Enable Funnel routing for port 11434
-tailscale funnel 11434 on
+# Enable Funnel routing for port 11434 in the background
+tailscale funnel --bg 11434
 ```
 
 Check the status and obtain your Tailnet Funnel URL:

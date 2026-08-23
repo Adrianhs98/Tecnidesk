@@ -113,6 +113,9 @@ app.include_router(inventory.router)
 from app.routers import clients
 app.include_router(clients.router)
 
+from app.routers import diagnostic
+app.include_router(diagnostic.router)
+
 # RUTAS PÚBLICAS — El antiguo /track fue reemplazado por /tracking (app/api/v1/)
 
 from app.routers import test_verification
