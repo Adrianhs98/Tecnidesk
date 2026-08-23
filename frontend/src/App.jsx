@@ -7,6 +7,7 @@ import ProtectedRoute from "./components/guards/ProtectedRoute";
 import PublicRoute from "./components/guards/PublicRoute";
 
 const AdminDashboard = lazy(() => import("./features/admin/AdminDashboard"));
+const TechnicianDashboard = lazy(() => import("./features/technician/TechnicianDashboard"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -83,8 +84,16 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tech"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'technician']}>
+              <TechnicianDashboard />
             </ProtectedRoute>
           }
         />

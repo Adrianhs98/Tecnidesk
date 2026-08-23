@@ -23,7 +23,7 @@ por separado.
 from datetime import datetime, timezone
 import secrets
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -56,6 +56,7 @@ _BLOCKING_STATUSES = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -90,6 +91,9 @@ async def get_current_user(
 
     if user is None or not user.is_active:
         raise credentials_exception
+
+    request.state.user_id = str(user.id)
+    request.state.shop_id = str(user.shop_id)
 
     return user
 
@@ -214,3 +218,74 @@ async def superadmin_key_guard(
         )
 
     return api_key
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dependency 5: verify_ticket_technician_access
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def verify_ticket_technician_access(
+    ticket_id: str,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Valida el acceso a un ticket para técnicos y administradores.
+    
+    Reglas:
+    - Administradores tienen acceso a todos los tickets de su taller.
+    - Técnicos solo pueden acceder a tickets asignados a ellos o sin asignar (NULL)
+      para permitir su auto-asignación.
+    - Si el ticket está asignado a otro técnico, lanza HTTP 403 Forbidden.
+    - Si el ticket no existe en el taller del usuario, lanza HTTP 404 Not Found.
+    """
+    import uuid as _uuid
+    from app.models.ticket import Ticket
+    from app.models.technician import Technician
+    from app.models.user import UserRoleEnum
+
+    try:
+        parsed_id = _uuid.UUID(str(ticket_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket {ticket_id} no encontrado en este taller."
+        )
+
+    result = await db.execute(
+        select(Ticket).where(Ticket.id == parsed_id, Ticket.shop_id == current_user.shop_id)
+    )
+    ticket = result.scalar_one_or_none()
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket {ticket_id} no encontrado en este taller."
+        )
+
+    if current_user.role == UserRoleEnum.technician:
+        # Si el ticket no tiene técnico asignado (None), se permite el acceso para auto-asignarse
+        if ticket.technician_id is None and ticket.assigned_technician_id is None:
+            return ticket
+
+        # Buscar perfil del técnico por user_id en el mismo taller
+        tech_res = await db.execute(
+            select(Technician).where(
+                Technician.user_id == current_user.id,
+                Technician.shop_id == current_user.shop_id,
+            )
+        )
+        tech_profile = tech_res.scalar_one_or_none()
+
+        is_assigned_to_me = False
+        if tech_profile and ticket.technician_id == tech_profile.id:
+            is_assigned_to_me = True
+        elif ticket.technician_id == current_user.id or ticket.assigned_technician_id == current_user.id:
+            is_assigned_to_me = True
+
+        if not is_assigned_to_me:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para acceder a un ticket asignado a otro técnico."
+            )
+
+    return ticket

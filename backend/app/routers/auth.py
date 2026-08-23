@@ -85,6 +85,8 @@ async def login(
         access_token=access_token,
         refresh_token=refresh_token,
         shop_name=shop_name,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
+        user_full_name=user.full_name,
     )
 
 
@@ -106,7 +108,14 @@ async def refresh_tokens(
 ) -> TokenResponse:
     """POST /auth/refresh — Smoke test: ST-09."""
     try:
-        access_token, new_refresh = await rotate_refresh_token(db, payload.refresh_token)
+        access_token, new_refresh, user = await rotate_refresh_token(db, payload.refresh_token)
+
+        from sqlalchemy import select
+        from app.models.shop import Shop
+        shop_res = await db.execute(select(Shop).where(Shop.id == user.shop_id))
+        shop = shop_res.scalar_one_or_none()
+        shop_name = shop.business_name if shop else None
+
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -117,6 +126,9 @@ async def refresh_tokens(
     return TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh,
+        shop_name=shop_name,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
+        user_full_name=user.full_name,
     )
 
 

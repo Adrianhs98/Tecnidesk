@@ -39,3 +39,16 @@ export const previewDiagnosis = async (brand, model, symptom) => {
   if (!response.ok) throw new Error("Error previewing diagnosis");
   return response.json();
 };
+
+export const sendFreeDiagnosticChat = async (message) => {
+  const response = await authFetch(`${API_BASE}/diagnostic/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ message })
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error sending free diagnostic chat");
+  }
+  return response.json();
+};
+

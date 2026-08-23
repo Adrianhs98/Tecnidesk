@@ -68,7 +68,7 @@ describe('SlaSettingsModal Component', () => {
   it('renders modal with SLA status fields and current threshold values', async () => {
     renderModal();
 
-    expect(screen.getByText('Configuración de SLAs')).toBeInTheDocument();
+    expect(screen.getByText('Configuración de Tiempos y Alertas')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByLabelText(/Horas SLA para En Espera de Ingreso/i)).toHaveValue(48);

@@ -147,7 +147,7 @@ export default function SlaSettingsModal({ onClose }) {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Configuración de SLAs de Taller"
+      aria-label="Configuración de Tiempos y Alertas de Taller"
     >
       <div
         className="modal-content"
@@ -192,10 +192,10 @@ export default function SlaSettingsModal({ onClose }) {
             </div>
             <div>
               <h2 style={{ fontSize: "17px", fontWeight: "700", color: "var(--text1)", margin: 0 }}>
-                Configuración de SLAs
+                Configuración de Tiempos y Alertas
               </h2>
               <p style={{ fontSize: "12px", color: "var(--text3)", margin: "2px 0 0" }}>
-                Tiempos máximos de atención por estado operativo
+                Tiempos límites permitidos antes de activar alertas visuales de retraso
               </p>
             </div>
           </div>
