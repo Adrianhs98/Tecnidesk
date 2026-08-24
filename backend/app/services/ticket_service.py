@@ -672,7 +672,9 @@ async def list_tickets(
     status: TicketStatusEnum | None = None,
     filter_group: str | None = None,
     search: str | None = None,
-    date_range: str | None = None
+    date_range: str | None = None,
+    technician_id: uuid.UUID | None = None,
+    unassigned_only: bool = False,
 ) -> tuple[list[Ticket], int]:
     limit = min(limit, 200)
 
@@ -685,6 +687,16 @@ async def list_tickets(
             selectinload(Ticket.technician),
         )
     )
+
+    if unassigned_only:
+        stmt = stmt.where(Ticket.technician_id.is_(None))
+    elif technician_id is not None:
+        stmt = stmt.where(
+            or_(
+                Ticket.technician_id == technician_id,
+                Ticket.assigned_technician_id == technician_id,
+            )
+        )
 
     if status is not None:
         stmt = stmt.where(Ticket.status == status)
@@ -887,6 +899,109 @@ async def assign_technician(
 
     ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
     return _clear_pin(ticket)
+
+
+async def assign_me_ticket(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    user: User,
+) -> Ticket:
+    """
+    Asigna el ticket al técnico autenticado si está sin asignar o ya le pertenece.
+    Si está asignado a otro técnico, lanza HTTP 409 Conflict.
+    """
+    ticket = await _get_ticket_or_404(
+        db,
+        ticket_id,
+        shop_id,
+        selectinload(Ticket.customer),
+        selectinload(Ticket.technician),
+        selectinload(Ticket.status_history),
+    )
+
+    from app.models.technician import Technician
+    tech = await db.scalar(
+        select(Technician).where(Technician.user_id == user.id, Technician.shop_id == shop_id)
+    )
+    if not tech:
+        tech = await db.scalar(
+            select(Technician).where(Technician.full_name == user.full_name, Technician.shop_id == shop_id)
+        )
+        if tech and tech.user_id is None:
+            tech.user_id = user.id
+            db.add(tech)
+            await db.flush()
+        elif not tech:
+            tech = Technician(
+                shop_id=shop_id,
+                full_name=user.full_name,
+                user_id=user.id,
+                is_active=True,
+            )
+            db.add(tech)
+            await db.flush()
+
+    if ticket.technician_id is not None and ticket.technician_id != tech.id:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El ticket ya está asignado a otro técnico."
+        )
+
+    ticket.technician_id = tech.id
+    ticket.technician = tech
+
+    await _record_status_history(
+        db=db,
+        ticket_id=ticket.id,
+        from_status=ticket.status.value if ticket.status else None,
+        to_status=ticket.status.value if ticket.status else "EN_ESPERA_INGRESO",
+        changed_by_user_id=user.id,
+        reason=f"Ticket auto-asignado por el técnico {user.full_name}",
+    )
+
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+
+
+async def reveal_ticket_pin(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    user: User,
+) -> str | None:
+    """
+    Registra el acceso auditor al PIN en el historial y retorna el PIN descifrado.
+    """
+    ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
+
+    await _record_status_history(
+        db=db,
+        ticket_id=ticket.id,
+        from_status=ticket.status.value if ticket.status else None,
+        to_status="PIN_REVEALED",
+        changed_by_user_id=user.id,
+        reason="PIN revelado por técnico",
+    )
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    if not ticket.pin_or_password:
+        return None
+
+    return decrypt_pin(ticket.pin_or_password)
 
 
 async def add_ticket_item(

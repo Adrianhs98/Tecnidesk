@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.technician import (
     TechnicianCreate,
+    TechnicianMeResponse,
     TechnicianMetricsTable,
     TechnicianResponse,
     TechnicianUpdate,
@@ -38,6 +39,18 @@ async def list_technicians(
     return await technician_service.get_technicians(db, current_user.shop_id, include_inactive)
 
 
+@router.get("/me", response_model=TechnicianMeResponse)
+async def get_technician_me(
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Obtiene el perfil operativo del técnico autenticado con sus estadísticas
+    (tickets activos, tickets completados y especialidades) sin exponer datos financieros.
+    """
+    return await technician_service.get_technician_me(db, current_user, current_user.shop_id)
+
+
 @router.post("", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
 async def create_technician(
     data: TechnicianCreate,
@@ -53,12 +66,12 @@ async def create_technician(
 
 @router.get("/metrics", response_model=TechnicianMetricsTable)
 async def get_metrics(
-    current_user: User = Depends(subscription_guard),
+    current_user: User = Depends(admin_guard),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Obtiene las métricas de todos los técnicos del taller, 
-    incluyendo especialidades inferidas y totales.
+    incluyendo especialidades inferidas y totales financieros. Solo administradores.
     """
     return await technician_service.get_technician_metrics(db, current_user.shop_id)
 

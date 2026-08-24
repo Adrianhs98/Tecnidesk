@@ -1,81 +1,153 @@
 # TecniDesk Frontend
 
-**Interfaz de usuario moderna para el Micro SaaS de gestión de talleres de celulares.**
+**Interfaz de usuario moderna y Workbench Operativo para el Micro SaaS de gestión de talleres de celulares.**
 
-Este proyecto es el frontend de TecniDesk, desarrollado con un enfoque en la velocidad, la experiencia de usuario (UX) y la facilidad de uso tanto para administradores de talleres como para sus clientes finales.
+Este proyecto es el cliente web de TecniDesk, desarrollado con **React 19**, **Vite 7** y **Tailwind CSS 4**. Ofrece una experiencia de alta fidelidad visual (*Workbench / Atmospheric*), gestión de estado ultra veloz con **React Query v5**, alternador de vistas (Lista y Tablero Kanban), diagnóstico asistido por IA, protección de privacidad (enmascaramiento de PII) y portal de rastreo público con whitelabeling dinámico.
+
+---
 
 ## 🚀 Stack Tecnológico
 
 - **Framework:** React 19
 - **Build Tool:** Vite 7
-- **Lenguaje:** JavaScript / TypeScript (tipado progresivo)
-- **Routing:** React Router (v7)
-- **Estilos:** Tailwind CSS v4 + Variables CSS (Modern UI)
-- **Comunicación:** Fetch API con interceptores para JWT
+- **Enrutamiento:** React Router 7
+- **Estado Asíncrono & Caché:** `@tanstack/react-query` v5
+- **Estilos & Diseño:** Tailwind CSS 4 + Variables CSS (Paleta OKLCH ámbar)
+- **Iconografía:** `lucide-react`
+- **Gestión de Temas:** `ThemeContext` (Modo Claro / Modo Oscuro con persistencia en `localStorage`)
+- **Compresión de Imágenes:** `browser-image-compression` (compresión en cliente <800 KB)
+- **Testing:** Vitest 3, `@testing-library/react`, `@testing-library/jest-dom`
 
 ---
 
 ## 🛠️ Instalación y Desarrollo
 
-### 1. Requisitos
+### 1. Requisitos Previos
 - Node.js (v18 o superior)
-- npm o yarn
+- npm (o pnpm / yarn)
 
-### 2. Configuración inicial
+### 2. Configuración Inicial
 
 ```bash
-# Clonar el repositorio
-git clone <repo-url>
-cd tecnidesk-frontend
+cd frontend
 
 # Instalar dependencias
 npm install
+
+# Configurar variable de entorno para desarrollo
+echo "VITE_API_URL=http://localhost:8000" > .env.local
 ```
 
-### 3. Ejecutar en desarrollo
+### 3. Ejecutar en Desarrollo
 
 ```bash
 npm run dev
 ```
-La aplicación estará disponible en `http://localhost:5173` por defecto.
+
+La aplicación estará disponible en `http://localhost:5173`.
 
 ---
 
-## 📦 Características Principales
+## 📦 Características Principales & Módulos
 
-### 🔧 Portal de Administración
-- **Dashboard:** Vista general de tickets activos, por reparar y listos.
-- **Gestión de Tickets:** Creación de órdenes de reparación, carga de evidencias (fotos) y diagnóstico técnico.
-- **Gestión de Técnicos:** Alta de técnicos, visualización de métricas de rendimiento, y especialidades inferidas detectadas por IA heurística.
-- **Control de Estados:** Actualización fluida del ciclo de vida del equipo (En revisión, Esperando repuesto, Listo, etc.).
+### 🛠️ Workbench Operativo del Taller (Fases 1 a 5)
+- **Alternador de Vista Lista / Tablero Kanban:** Selector interactivo en la barra de herramientas del `AdminDashboard.jsx` con persistencia de preferencia en `localStorage` (`tecnidesk_workbench_view`).
+- **Tablero Kanban Interactivo:** Organizado en 5 columnas de flujo operativo (*Ingreso / Recepción*, *En Revisión & Diagnóstico*, *Presupuesto & Espera*, *En Reparación*, *Listo para Retirar*) con tarjetas de alta densidad, badges de técnico y alertas visuales de SLA vencido en rojo.
+- **Smart Action CTA:** Botón contextual prioritario (*Asignar* → *Diagnosticar* → *WhatsApp* → *Ver detalle*) para guiar ágilmente al personal del taller.
+- **Guardias Técnicas en UI:** Intercepción y feedback visual en cambios de estado para garantizar que no se avance a `EN_REPARACION` sin técnico responsable.
+- **Ajustes de SLAs Multi-Tenant (`SlaSettingsModal.jsx`):** Modal interactivo para configurar umbrales de SLA por estado en tiempo real con botón de restablecimiento a valores predeterminados.
+- **Métricas de Tiempos de Ciclo (`CycleTimeAnalyticsModal.jsx`):** Visualización de Lead Time, Cycle Time activo, desglose por etapa en barras de progreso y detección gráfica del cuello de botella.
 
-### 🔍 Portal de Rastreo Público
-- Acceso mediante token único (sin login para el cliente).
-- Visualización en tiempo real del progreso de la reparación.
-- **Whitelabeling Dinámico:** El portal adapta el nombre de la tienda y su logotipo.
-- **Aprobación de Presupuesto:** El cliente puede aceptar o rechazar presupuestos directamente desde el portal.
-- **Canal de Negociación (WhatsApp):** Botón contextual unificado que permite al cliente negociar o conversar directamente sobre el presupuesto con el taller asignado.
+### 👨‍🔧 Portal de Técnico Dedicado (`/tech`)
+- **Mesa de Trabajo de Alta Densidad (`TechnicianDashboard.jsx`):** Pestañas "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic y selector de vista Lista vs Tablero Kanban de 3 columnas (*Por Diagnosticar*, *En Reparación / Repuesto*, *Listo para Entrega*).
+- **Modo Supervisor para Administradores:** Los usuarios administradores que navegan a `/tech` entran en modo de solo lectura (sin mutaciones operativas ni emisión de PINs) para preservar la trazabilidad de auditoría.
+- **Ficha de Reparación Ágil (`TechnicianWorkModal.jsx`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos y evidencias fotográficas.
+- **Copiloto IA Técnico (`AiChatBubble.jsx` y `AiChatDrawer.jsx`):** Burbuja flotante permanente en `/tech` y drawer lateral conversacional potenciado por Gemini 3.7 Flash con soporte para consulta libre y diagnóstico contextualizado al ticket.
 
-### 🔐 Seguridad y Auth
-- Sistema de registro de talleres con onboarding completo.
-- Protección de rutas (Guards) para áreas administrativas.
-- Manejo automático de Access y Refresh Tokens.
+### 🧠 Diagnóstico Asistido con IA (`DiagnosticAssistPanel.jsx`)
+- Panel de razonamiento explicable integrado en el modal de diagnóstico (`DiagnosticModal.jsx`).
+- Sugerencias generadas por IA con citaciones grounding, evaluación de confianza y selector rápido de repuestos comunes.
+- Interfaz interactiva de feedback y confirmación de aprendizaje RAG para enriquecer la base de conocimiento (`pgvector`).
+
+### 🔒 Privacidad y Enmascaramiento de PII
+- Módulo `src/utils/privacy.js` (`maskPhone`, `maskEmail`, `maskTrackingCode`) para evitar *shoulder surfing* en mostrador.
+- Enmascaramiento por defecto en tarjetas del panel y botón de revelado seguro (`Eye`/`EyeOff`) dentro de `AdminTicketCard.jsx` y `TechnicianWorkModal.jsx`.
+
+### 🎨 Arquitectura de Temas (Modo Claro & Modo Oscuro)
+- Paleta cálida ámbar construida sobre espacios de color **OKLCH** libre de gradientes sucios.
+- Alternador dinámico `ThemeToggle.jsx` conectado a `ThemeContext` y `localStorage` (`tecnidesk-theme`).
+- Componente de navegación *N5 Floating Pill* optimizado para pantallas de taller.
+
+### 🔍 Portal de Rastreo Público & Whitelabeling
+- Consulta sin credenciales mediante `tracking_token` auto-generado.
+- Adaptación dinámica de marca (nombre del taller y logotipo).
+- Autorización o rechazo interactivo de presupuestos con motivo opcional.
+- Botón contextual de WhatsApp para negociación directa de costos.
+
+### ⚡ Caché Zero-Delay
+- Carga instantánea de detalles de órdenes usando `initialData` de React Query.
+- Purgado seguro de memoria en eventos de cierre de sesión (`auth:logout` ejecutando `queryClient.clear()`).
+
+---
+
+## 🧪 Pruebas Automatizadas (Vitest + Testing Library)
+
+El frontend cuenta con una suite automatizada completa que valida componentes, modales, vistas Kanban, portal de técnico, copiloto IA, utilidades y hooks:
+
+```bash
+# Ejecutar todas las pruebas (97 tests pasando al 100%)
+npm test
+
+# Ejecutar pruebas con reporte de cobertura
+npm run test:coverage
+
+# Ejecutar pruebas en modo observador (watch)
+npx vitest
+```
 
 ---
 
 ## 📂 Estructura de Carpetas
 
-- `src/api/`: Configuración de la base URL e interceptores de autenticación.
-- `src/components/`: Componentes compartidos (Logo, Stepper, Modales).
-- `src/features/admin/`: Lógica y componentes exclusivos del panel de administración.
-- `src/pages/`: Vistas principales (Login, Registro, Portal de Tracking).
-- `src/utils/`: Funciones de ayuda y constantes (formateo de fechas, config de estados).
+```text
+frontend/
+├── src/
+│   ├── api/                   # Cliente fetch autenticado (`authFetch.js`), tickets, diagnostic, technician
+│   ├── assets/                # Recursos estáticos (logos, iconografía)
+│   ├── components/            # Componentes globales y de protección
+│   │   ├── guards/            # ProtectedRoute (con matriz de roles) y PublicRoute
+│   │   └── shared/            # ThemeToggle, Logo, Steppers, etc.
+│   ├── context/               # ThemeContext (Modo Claro / Oscuro)
+│   ├── features/              # Módulos principales:
+│   │   ├── admin/             # Workbench Administrativo y Analítica
+│   │   │   ├── components/    # KanbanBoard, SlaSettingsModal, CycleTimeModal, etc.
+│   │   │   └── AdminDashboard.jsx
+│   │   ├── technician/        # Portal de Técnico, Mesa de Trabajo y Copiloto IA
+│   │   │   ├── AiChatBubble.jsx
+│   │   │   ├── AiChatDrawer.jsx
+│   │   │   ├── TechnicianHeader.jsx
+│   │   │   ├── TechnicianTicketCard.jsx
+│   │   │   ├── TechnicianWorkModal.jsx
+│   │   │   └── TechnicianDashboard.jsx
+│   │   └── tracking/          # Portal público de rastreo
+│   ├── pages/                 # Páginas (Login, Registro, Recuperación de contraseña)
+│   ├── tests/                 # 97 pruebas automatizadas (Vitest)
+│   ├── utils/                 # Utilidades (privacy.js, date.js, currency.js, constants.js)
+│   ├── App.css                # Estilos globales, paleta OKLCH y diseño Workbench
+│   ├── App.jsx                # Enrutador principal y configuración de React Query
+│   ├── index.css              # Punto de entrada Tailwind CSS 4
+│   └── main.tsx               # Montaje del árbol React
+├── public/                    # Archivos estáticos públicos
+├── package.json
+└── vite.config.ts
+```
 
 ---
 
-## 🎨 Guía de Estilo
+## 🎨 Guía de Estilo y Paleta OKLCH
 
-El proyecto utiliza una paleta de colores profesional y moderna:
-- **Accent (Dorado):** `#C9A76A` (Primario para botones y estados destacados).
-- **Success (Verde):** `#25D366` (WhatsApp e indicadores de éxito).
-- **Background:** Diseño oscuro/premium optimizado para visibilidad en talleres.
+- **Primary / Amber Accent:** Tono ámbar cálido calibrado en OKLCH para botones primarios, estados activos y badges de SLA.
+- **Success / WhatsApp:** `#25D366` para indicadores de éxito y contacto de WhatsApp.
+- **Atmospheric Dark:** Tema oscuro profundo diseñado para reducir fatiga visual en mostradores y talleres.
+- **Warm Light:** Tema claro de alto contraste basado en fondos crema/ámbar sutiles (`[data-theme="light"]`).
+

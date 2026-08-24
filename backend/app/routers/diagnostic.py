@@ -89,3 +89,54 @@ async def preview_diagnosis(
     return {
         "suggestion": f"Basado en casos anteriores de {payload.brand} {payload.model}: Posible {best.diagnosed_cause}. Solución: {best.solution_applied}."
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# POST /diagnostic/chat — Copiloto IA Técnico Libre
+# ═════════════════════════════════════════════════════════════════════════════
+import uuid
+from google import genai
+from google.genai import types
+from fastapi import Request
+from app.config import get_settings
+from app.core.rate_limit import limiter, get_user_rate_limit_key
+from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse
+
+
+@router.post(
+    "/chat",
+    response_model=DiagnosticMessageResponse,
+    summary="Chat técnico libre / Copiloto de taller",
+    description="Consulta técnica libre con el copiloto IA (Gemini 3.7 Flash) para asistencia en diagnósticos y reparaciones.",
+)
+@limiter.limit("10/minute", key_func=get_user_rate_limit_key)
+async def workshop_diagnostic_chat(
+    request: Request,
+    payload: DiagnosticMessageIn,
+    current_user: User = Depends(subscription_guard),
+):
+    settings = get_settings()
+    prompt = (
+        "Eres un copiloto técnico experto en microelectrónica, reparación de hardware, telefonía móvil, "
+        "computadoras y electrodomésticos para talleres profesionales.\n"
+        "Proporciona respuestas concisas, altamente técnicas, prácticas y ordenadas paso a paso para asistir al técnico.\n\n"
+        f"Consulta del técnico:\n{payload.message}"
+    )
+
+    try:
+        client = genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model="gemini-3.7-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.2),
+        )
+        ai_reply = response.text or "No se pudo generar una respuesta del copiloto en este momento."
+    except Exception as exc:
+        ai_reply = f"Servicio de Copiloto IA no disponible temporalmente: {str(exc)}"
+
+    return DiagnosticMessageResponse(
+        id=uuid.uuid4(),
+        role="assistant",
+        content=ai_reply,
+        created_at=datetime.now(timezone.utc),
+    )

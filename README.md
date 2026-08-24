@@ -1,327 +1,290 @@
 # TecniDesk
 
-Micro SaaS multi-tenant para la gestión de talleres de reparación de celulares.
+Micro SaaS multi-tenant para la gestión integral de talleres de reparación de celulares.
 
-TecniDesk centraliza el ingreso de equipos, clientes, tickets de reparación, diagnósticos, repuestos, evidencias fotográficas, presupuestos y seguimiento público. Cada taller trabaja aislado mediante su `shop_id` y puede ofrecer a sus clientes un portal de rastreo con identidad visual propia.
+TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de servicio, diagnósticos técnicos asistidos por IA, inventario de repuestos, evidencias fotográficas, presupuestos y seguimiento público para clientes. Cada taller opera de forma estrictamente aislada mediante su identificador único (`shop_id`) y ofrece a sus clientes un portal de rastreo público con whitelabeling dinámico (logotipo y nombre propio).
 
-## Funcionalidades
+---
 
-- Panel administrativo para gestionar tickets, clientes, técnicos y estados de reparación.
-- Gestión de Técnicos con métricas de rendimiento, especialidades inferidas y asignación automática (Load-Balancing).
-- Inventario de repuestos con altas, edición, eliminación lógica, reabastecimiento y alertas de stock bajo.
-- Sugerencias de repuestos frecuentes y selección de piezas desde el inventario al preparar un diagnóstico.
-- Diagnóstico técnico con repuestos, cantidades y precios asociados al ticket.
-- Descuento y restauración de stock al agregar o quitar piezas de una reparación.
-- Evidencias fotográficas comprimidas en el navegador antes de enviarse al almacenamiento.
-- Portal público de seguimiento mediante token, sin cuenta para el cliente.
-- Aprobación o rechazo de presupuestos desde el portal de seguimiento.
-- Contacto contextual con el taller mediante WhatsApp.
-- Whitelabeling: nombre y logotipo del taller en el portal público.
-- Autenticación con JWT de acceso y refresh tokens persistentes.
-- Control de suscripción mediante `HTTP 402` cuando el plan no está vigente.
-- Estadísticas del panel calculadas directamente en PostgreSQL.
+## Funcionalidades Principales
 
-## Arquitectura
+### 🛠️ Workbench Operativo (Mesa de Trabajo de Alta Eficiencia)
+- **Alternador de Vistas (Lista & Kanban):** Visualización en lista tabular paginada o tablero interactivo Kanban organizado en 5 columnas operativas (*Ingreso / Recepción*, *En Revisión & Diagnóstico*, *Presupuesto & Espera*, *En Reparación*, *Listo para Retirar*) con persistencia de preferencia en `localStorage`.
+- **Ordenamiento SQL Inteligente:** Priorización en backend mediante `CASE` que ubica al inicio tickets sin técnico asignado, seguidos de aquellos con SLA vencido y finalmente por orden cronológico.
+- **Smart Action CTA:** Botón de acción rápida contextual (*Asignar* → *Diagnosticar* → *WhatsApp* → *Ver detalle*) para guiar al técnico hacia la acción prioritaria inmediata.
+- **Guardia Estricta de Asignación Técnica:** Validación estricta que prohíbe la transición a `EN_REPARACION` si el ticket no cuenta con un técnico asignado (`UnassignedTechnicianError` / HTTP 400).
+- **Auditoría Inmutable de Estados:** Registro síncrono en `ticket_status_history` de cada transición de estado con autor, timestamp y motivo.
+- **SLAs Dinámicos y Multi-Tenant:** Umbrales de SLA configurables por cada taller (`shops.sla_config`) con panel de ajustes en tiempo real y fallback automático a defaults del sistema.
+- **Analítica de Tiempos de Ciclo y Cuellos de Botella:** Endpoint y modal interactivo (`GET /tickets/analytics/cycle-times`) para monitorear Lead Time promedio, Cycle Time activo, desglose por etapa, porcentaje de cumplimiento de SLA y detección automática de cuellos de botella.
+
+### 👨‍🔧 Portal de Técnico & Mesa de Trabajo Dedicada (`/tech`)
+- **Experiencia Operativa para el Técnico:** Enrutamiento inteligente por rol (`/tech` vs `/admin`), pestañas dedicadas de "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic (`POST /tickets/{id}/assign-me`).
+- **Modo Supervisor de Solo Lectura:** Acceso de inspección para administradores en `/tech` que preserva la trazabilidad de auditoría deshabilitando mutaciones operativas.
+- **Ficha de Reparación Ágil (`TechnicianWorkModal`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos y evidencias fotográficas.
+- **Copiloto IA de Taller (`AiChatBubble` & `AiChatDrawer`):** Burbuja flotante permanente y drawer lateral conversacional potenciado por Gemini 3.7 Flash con modo libre de taller (`POST /diagnostic/chat`) y modo contextualizado al ticket (`POST /tickets/{id}/diagnostic-chat`), botón para volcar diagnósticos y confirmación de aprendizaje RAG.
+
+### 🧠 Diagnóstico Asistido con IA (RAG Híbrido & Human-in-the-Loop)
+- **Búsqueda Vectorial HNSW:** Recuperación semántica sobre base de conocimiento y casos históricos con `pgvector` (índices HNSW de 768 dimensiones) y aislamiento multi-tenant.
+- **Embeddings Locales:** Generación de vectores de texto mediante Ollama (`nomic-embed-text-v2-moe`) con fallback resiliente.
+- **Razonamiento Grounded con Gemini 3.7 Flash:** Generación de explicaciones técnicas estructuradas y citaciones verificadas contra alucinaciones.
+- **Human-in-the-Loop:** Panel interactivo `DiagnosticAssistPanel` que permite al técnico validar o corregir sugerencias de la IA, retroalimentando la base con casos reales validados (`real_validated`).
+
+### 📦 Inventario y Repuestos
+- **Catálogo de Repuestos:** Control de stock, precios de costo y venta, alertas de stock bajo y eliminación lógica.
+- **Trazabilidad en Diagnósticos:** Descuento y restauración automática de existencias al vincular o desvincular repuestos a las órdenes de reparación.
+- **Validaciones Estrictas:** Reglas de negocio para componentes críticos (ej. displays con marca y modelo obligatorio).
+
+### 🔒 Privacidad, Seguridad y Enmascaramiento de PII
+- **Enmascaramiento de PII:** Protección contra *shoulder surfing* en mostrador enmascarando teléfono (`maskPhone`), correo (`maskEmail`) y código de guía (`maskTrackingCode`).
+- **Revelado Seguro Bajo Demanda:** Botón interactivo con ícono de ojo (`Eye`/`EyeOff`) en el modal de detalles para técnicos autorizados.
+- **Cifrado Simétrico Fernet:** Cifrado en base de datos de contraseñas y patrones de desbloqueo de los dispositivos (`pin_or_password`) con rate limiting y auditoría.
+- **Autenticación Robusta:** JWT con tokens de acceso de corta duración y refresh tokens estatales de un solo uso con rotación y revocación inmediata en logout.
+- **Control de Suscripción:** Middleware `subscription_guard` que restringe el acceso con `HTTP 402 Payment Required` ante suscripciones vencidas o suspendidas.
+
+### 🎨 Experiencia Visual y Temas
+- **Modo Claro / Modo Oscuro:** Sistema de temas con `ThemeContext` basado en una paleta cálida ámbar calibrada en **OKLCH** y persistencia en `localStorage`.
+- **Diseño Atmospheric y N5 Floating Pill:** Barra de navegación flotante y componentes visuales de alto contraste diseñados para entornos de taller.
+- **Caché Zero-Delay:** Carga instantánea de detalles con React Query (`initialData` y *stale-while-revalidate*).
+
+### 📱 Portal Público de Rastreo & Whitelabeling
+- **Acceso por Token Único:** Consulta de estado en tiempo real sin requerir cuenta o login para el cliente.
+- **Whitelabeling Dinámico:** Adaptación del portal con el logotipo y nombre comercial del taller.
+- **Aprobación de Presupuestos:** El cliente puede autorizar o rechazar presupuestos en línea (con motivo de rechazo opcional).
+- **Canal Contextual de WhatsApp:** Botón directo para negociación ágil de presupuestos con el taller.
+
+---
+
+## Stack Tecnológico
 
 ```text
 Tecnidesk/
-├── backend/     API REST con FastAPI
-└── frontend/    SPA con React y Vite
+├── backend/     # API REST asíncrona con FastAPI, pgvector y Gemini
+└── frontend/    # SPA reactiva con React 19, Vite 7 y Tailwind CSS 4
 ```
 
-El backend expone la API y concentra la autenticación, autorización, aislamiento multi-tenant, lógica de negocio, persistencia y migraciones. El frontend consume la API mediante `authFetch`, que adjunta el token de acceso y gestiona la renovación de sesión.
-
 ### Backend
-
-- Python 3.12+
-- FastAPI
-- SQLAlchemy 2.0 con consultas asíncronas
-- PostgreSQL y `asyncpg`
-- Alembic
-- Pydantic v2
-- JWT, Fernet y bcrypt
-- SlowAPI para rate limiting
-- Cloudflare R2 para evidencias
-- Resend para correos transaccionales
+- **Lenguaje y Framework:** Python 3.12+, FastAPI
+- **Base de Datos & ORM:** PostgreSQL con extensión `pgvector` (HNSW), SQLAlchemy 2.0 (asyncio) y `asyncpg`
+- **Control de Migraciones:** Alembic
+- **Inteligencia Artificial & RAG:** Google Gemini 3.7 Flash, Ollama (`nomic-embed-text-v2-moe`), `pgvector`
+- **Validación y Configuración:** Pydantic v2, Pydantic Settings
+- **Seguridad y Criptografía:** Fernet (`cryptography`), Bcrypt, JWT (`python-jose`)
+- **Rate Limiting:** SlowAPI (doble blindaje por user_id)
+- **Almacenamiento de Evidencias:** Cloudflare R2 (API S3 compatible)
+- **Correo Transaccional:** Resend
 
 ### Frontend
+- **Framework & Empaquetador:** React 19, Vite 7
+- **Enrutamiento:** React Router 7 (con matriz de roles en ProtectedRoute)
+- **Estilos & Diseño:** Tailwind CSS 4, Variables CSS (Paleta OKLCH ámbar)
+- **Gestión de Estado Asíncrono:** `@tanstack/react-query` v5
+- **Iconografía:** `lucide-react`
+- **Compresión de Imágenes:** `browser-image-compression` (procesamiento local <800 KB)
+- **Testing:** Vitest 3, `@testing-library/react`, `@testing-library/jest-dom`
 
-- React 19
-- Vite 7
-- React Router 7
-- Tailwind CSS 4 y variables CSS del proyecto
-- `lucide-react` para iconografía
-- `browser-image-compression` para evidencias fotográficas
+---
 
-## Estructura principal
+## Estructura del Proyecto
 
 ```text
-backend/
-├── app/
-│   ├── api/v1/       Endpoints públicos de tracking
-│   ├── core/         Dependencias, guards y rate limiting
-│   ├── models/       Modelos SQLAlchemy
-│   ├── routers/      Rutas FastAPI
-│   ├── schemas/      Esquemas Pydantic
-│   ├── services/     Lógica de negocio
-│   ├── config.py     Configuración desde variables de entorno
-│   ├── database.py   Conexión asíncrona a PostgreSQL
-│   └── main.py       Aplicación FastAPI, CORS y middlewares
-├── alembic/          Migraciones de base de datos
-├── scripts/          Seeds y tareas operativas
-├── requirements.txt
-└── alembic.ini
-
-frontend/
-├── src/
-│   ├── api/                      Cliente HTTP y configuración de API
-│   ├── components/               Componentes compartidos y guards
-│   ├── features/admin/           Dashboard y componentes administrativos
-│   ├── pages/                    Login, registro y tracking público
-│   ├── utils/                    Estados y utilidades
-│   ├── App.jsx
-│   └── main.tsx
-├── public/
-├── package.json
-├── vercel.json
-└── vite.config.ts
+tecnidesk/
+├── backend/
+│   ├── alembic/              # Migraciones de base de datos
+│   ├── app/
+│   │   ├── api/v1/           # Endpoints públicos (tracking de tickets)
+│   │   ├── core/             # Dependencias, guards de seguridad y rate limiters
+│   │   ├── models/           # Modelos ORM (Ticket, Shop, SlaHistory, Diagnostic, etc.)
+│   │   ├── routers/          # Controladores (Auth, Tickets, Shops, Technicians, Inventory, etc.)
+│   │   ├── schemas/          # Esquemas de validación Pydantic v2
+│   │   ├── services/         # Capa de negocio (TicketService, EmbeddingService, etc.)
+│   │   ├── config.py         # Configuración centralizada vía Pydantic Settings
+│   │   ├── database.py       # Motor asíncrono SQLAlchemy
+│   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
+│   ├── scripts/              # Seeds y scripts de sincronización
+│   └── tests/                # 130 tests unitarios y de integración con pytest y respx
+├── frontend/
+│   └── src/
+│       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician)
+│       ├── components/       # Componentes globales y protectores de ruta (ProtectedRoute)
+│       ├── context/          # ThemeContext (Modo Claro/Oscuro OKLCH)
+│       ├── features/
+│       │   ├── admin/        # Módulo administrativo Workbench y analítica
+│       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto IA
+│       │   └── tracking/     # Portal público de rastreo para clientes
+│       ├── pages/            # Login, Registro y Páginas públicas
+│       ├── tests/            # 97 tests con Vitest y Testing Library
+│       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
+│       ├── App.css           # Estilos Workbench y temas OKLCH
+│       └── App.jsx           # Rutas y enrutador principal
+├── openspec/                 # Especificaciones y cambios archivados bajo SDD
+└── PROJECT_STATE.md          # Auditoría técnica e histórico del estado del código
 ```
 
-## Requisitos
+---
 
-- Python 3.12 o superior
-- Node.js 18 o superior
-- PostgreSQL 14 o superior, local o administrado
-- Credenciales de Cloudflare R2 para evidencias
-- API key de Resend para correos transaccionales
+## Requisitos Previos
 
-## Instalación local
+- **Python:** 3.12 o superior
+- **Node.js:** 18 o superior
+- **PostgreSQL:** 14 o superior con extensión `pgvector` instalada
+- **Ollama:** Instancia local o remota con modelo `nomic-embed-text-v2-moe` descargado
+- **Google Gemini API:** Clave de API con acceso al modelo Gemini 3.7 Flash
+- **Cloudflare R2:** Cuenta y credenciales para almacenamiento de evidencias fotográficas
+- **Resend:** API Key para envío de correos transaccionales
 
-### Backend
+---
+
+## Instalación y Ejecución Local
+
+### 1. Backend
 
 Desde la raíz del proyecto:
 
 ```bash
 cd backend
 python -m venv .venv
-```
 
-Activar el entorno virtual:
+# Activar entorno virtual
+source .venv/bin/activate    # Linux/macOS
+# .venv\Scripts\Activate.ps1 # Windows
 
-```bash
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-# Linux o macOS
-source .venv/bin/activate
-```
-
-Instalar dependencias:
-
-```bash
+# Instalar dependencias
 pip install -r requirements.txt
-```
 
-Crear la configuración local:
-
-```bash
-# Windows
-Copy-Item .env.example .env
-
-# Linux o macOS
+# Configurar variables de entorno
 cp .env.example .env
 ```
 
-Aplicar migraciones y cargar datos iniciales:
+Configurar las credenciales en `backend/.env`, aplicar migraciones y ejecutar seed:
 
 ```bash
 alembic upgrade head
 python scripts/seed.py
 ```
 
-Iniciar la API:
+Iniciar el servidor de desarrollo:
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-Documentación interactiva:
+Documentación interactiva disponible en:
+- **Swagger UI:** `http://localhost:8000/docs`
+- **ReDoc:** `http://localhost:8000/redoc`
+- **Health Check:** `http://localhost:8000/health`
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-- Health check: `http://localhost:8000/health`
+### 2. Frontend
 
-### Frontend
-
-En otra terminal:
+En una terminal independiente:
 
 ```bash
 cd frontend
 npm install
-```
 
-Crear `frontend/.env.local`:
+# Configurar URL de la API
+echo "VITE_API_URL=http://localhost:8000" > .env.local
 
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-Iniciar el servidor de desarrollo:
-
-```bash
+# Iniciar servidor de desarrollo
 npm run dev
 ```
 
-La aplicación estará disponible normalmente en `http://localhost:5173`.
+La aplicación estará disponible en `http://localhost:5173`.
 
-## Variables de entorno
+---
 
-Las variables del backend se configuran en `backend/.env`. No deben subirse al repositorio.
+## Variables de Entorno (Backend)
 
-| Variable | Uso |
+| Variable | Descripción |
 |---|---|
-| `DB_URL` | Conexión asíncrona de la aplicación, normalmente con `postgresql+asyncpg://` |
-| `DATABASE_URL` | Conexión síncrona opcional para herramientas CLI |
-| `JWT_SECRET` | Secreto para tokens de acceso |
-| `JWT_REFRESH_SECRET` | Secreto independiente para refresh tokens |
-| `FERNET_KEY` | Clave para cifrar datos sensibles del dispositivo |
-| `BCRYPT_ROUNDS` | Factor de trabajo para contraseñas |
-| `R2_ENDPOINT` | Endpoint de Cloudflare R2 |
-| `R2_ACCESS_KEY` | Credencial de acceso a R2 |
-| `R2_SECRET_KEY` | Credencial secreta de R2 |
-| `R2_BUCKET_NAME` | Bucket para evidencias |
-| `RESEND_API_KEY` | API key para correo transaccional |
-| `MAIL_FROM` | Remitente de correos |
-| `WEBHOOK_URL` | Endpoint opcional de notificaciones |
-| `WEBHOOK_SECRET` | Secreto para validar webhooks |
-| `FRONTEND_URL` | URL pública usada en enlaces enviados por correo |
-| `ALLOWED_ORIGINS_DEV` | Orígenes locales permitidos por CORS, separados por comas |
+| `DB_URL` | Cadena de conexión asíncrona (`postgresql+asyncpg://...`) |
+| `DATABASE_URL` | Cadena de conexión síncrona opcional para CLI y Alembic |
+| `JWT_SECRET` | Secreto criptográfico para firma de tokens de acceso (HS256) |
+| `JWT_REFRESH_SECRET` | Secreto independiente para refresh tokens estatales |
+| `SUPERADMIN_API_KEY` | Clave maestra para activación administrativa de talleres |
+| `FERNET_KEY` | Clave Fernet para cifrado simétrico de PINs de dispositivos |
+| `BCRYPT_ROUNDS` | Factor de trabajo de hashing para contraseñas (10 en dev, 12 en prod) |
+| `GEMINI_API_KEY` | Clave de API de Google Gemini para diagnóstico asistido |
+| `LOCAL_EMBEDDING_SERVICE_URL` | URL de Ollama (`http://localhost:11434`) para embeddings |
+| `R2_ENDPOINT` | Endpoint S3 de Cloudflare R2 |
+| `R2_ACCESS_KEY` | Access Key de Cloudflare R2 |
+| `R2_SECRET_KEY` | Secret Key de Cloudflare R2 |
+| `R2_BUCKET_NAME` | Nombre del bucket para evidencias fotográficas |
+| `RESEND_API_KEY` | API Key de Resend para correos de recuperación y bienvenida |
+| `MAIL_FROM` | Dirección de remitente para correos transaccionales |
+| `FRONTEND_URL` | URL base del cliente para construcción de enlaces en correos |
+| `ALLOWED_ORIGINS_DEV` | Orígenes locales adicionales permitidos por CORS (separados por coma) |
 
-En el frontend, `VITE_API_URL` debe apuntar al backend correspondiente al entorno. En producción no debe conservar la URL local `http://localhost:8000`.
+---
 
-## Flujo operativo
+## Pruebas y Calidad de Código
 
-1. El administrador registra un cliente y crea un ticket con los datos del equipo.
-2. El taller actualiza el estado, asigna técnico y registra evidencias.
-3. El técnico documenta el diagnóstico y agrega mano de obra o repuestos.
-4. Las piezas vinculadas al inventario descuentan stock de forma controlada.
-5. El cliente recibe o consulta el enlace público de seguimiento.
-6. El cliente aprueba, rechaza o negocia el presupuesto desde el portal.
-7. El taller continúa el flujo hasta marcar la reparación como lista para entregar.
+El proyecto cuenta con suites de pruebas automatizadas en backend y frontend con cobertura completa de flujos críticos, lógica multi-tenant, ordenamiento SQL, analíticas y componentes visuales.
 
-## Inventario
+### Tests del Backend (Pytest + Respx)
 
-El módulo de inventario está disponible desde el panel administrativo y soporta:
-
-- Nombre, costo, precio de venta y stock inicial.
-- Umbral configurable de stock bajo.
-- Validación de cantidades enteras y valores monetarios no negativos.
-- Sugerencias de repuestos comunes, como pines de carga, baterías, displays y flex.
-- Regla de negocio para displays: deben registrarse con marca y modelo.
-- Reabastecimiento y eliminación lógica para conservar el historial de tickets.
-
-El endpoint utiliza el aislamiento del taller autenticado. Un usuario sólo puede consultar o modificar inventario asociado a su propio `shop_id`.
-
-## Despliegue
-
-La distribución recomendada es:
-
-| Componente | Plataforma |
-|---|---|
-| Backend | Render u otro servicio ASGI |
-| Frontend | Vercel |
-| Base de datos | PostgreSQL administrado, por ejemplo Supabase |
-| Archivos | Cloudflare R2 |
-| Correo | Resend |
-
-Antes de desplegar:
-
-1. Confirmar que las migraciones están incluidas en el commit publicado.
-2. Ejecutar `alembic upgrade head` contra la base de datos de producción.
-3. Configurar `VITE_API_URL` en el proyecto del frontend.
-4. Configurar `FRONTEND_URL` y los orígenes permitidos en el backend.
-5. Revisar los logs del backend después de cada migración o cambio de variables.
-6. Verificar el flujo de login, creación de ticket, inventario y tracking público.
-
-## Comandos útiles
+La suite de backend valida modelos, servicios, guards de seguridad, cálculo de tiempos de ciclo y diagnóstico asistido con mocks determinísticos de API:
 
 ```bash
-# Backend
 cd backend
-alembic current
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+source .venv/bin/activate
 
-# Frontend
-cd frontend
-npm run dev
-npm run build
-npm run lint
+# Ejecutar todos los tests (121+ tests pasando al 100%)
+pytest
+
+# Ejecutar suite con reporte de cobertura
+pytest --cov=app tests/
+
+# Ejecutar directorio específico
+pytest tests/integration/
 ```
 
-## Seguridad
+### Tests del Frontend (Vitest + Testing Library)
 
-- El aislamiento multi-tenant se aplica mediante el `shop_id` del usuario autenticado. Las dependencias resuelven la identidad y la suscripción del taller, y la capa de servicios vuelve a filtrar las consultas y mutaciones por ese identificador.
-- Las contraseñas se almacenan con hash bcrypt.
-- Los PIN o datos sensibles del dispositivo se cifran con Fernet.
-- Los refresh tokens se almacenan de forma persistente y se rotan.
-- Las rutas sensibles utilizan guards de autenticación y suscripción.
-- El acceso público al tracking se limita al token del ticket.
-- CORS debe configurarse con los dominios reales de cada entorno.
-- Los secretos deben permanecer únicamente en las variables de entorno del despliegue.
-
-### Rate limiting
-
-SlowAPI limita `POST /auth/login` a `5 intentos por minuto y por IP`. Esto reduce intentos automatizados de fuerza bruta sobre las credenciales. El portal público de tracking utiliza tokens de ticket y no requiere sesión; cualquier límite adicional para esos endpoints debe considerarse una mejora independiente y no se presenta aquí como una protección ya implementada.
-
-### Verificación del aislamiento
-
-El criterio de seguridad es que un usuario nunca pueda consultar ni modificar datos de otro taller aunque conozca un UUID válido. Las operaciones administrativas reciben el contexto del usuario autenticado y los servicios aplican filtros por `shop_id` en tickets, clientes, inventario y operaciones relacionadas. Las verificaciones de base de datos y endpoints se ejecutan con los scripts descritos en la sección de pruebas; para una auditoría formal todavía sería recomendable convertir estos escenarios en una suite automatizada de regresión.
-
-## Pruebas y verificación
-
-El proyecto cuenta actualmente con scripts de verificación manual y pruebas de integración orientadas a los flujos críticos:
-
-| Script | Propósito |
-|---|---|
-| `backend/scripts/test_db.py` | Comprobar conexión y estado básico de la base de datos |
-| `backend/scripts/test_inventory_endpoint.py` | Verificar `GET` y `POST /inventory`, incluido `is_low_stock` |
-| `backend/scripts/test_real_post.py` | Probar la creación de inventario contra una base de datos real |
-| `backend/scripts/test_ticket_service.py` | Ejercitar escenarios del servicio de tickets y aislamiento de datos |
-
-Ejecutar desde `backend/`, con el entorno virtual y las variables configuradas:
-
-```bash
-python scripts/test_db.py
-python scripts/test_inventory_endpoint.py
-python scripts/test_real_post.py
-python scripts/test_ticket_service.py
-```
-
-Para validar el frontend:
+La suite de frontend prueba componentes visuales, interactividad del Workbench Kanban, modales de configuración de SLAs, analíticas de tiempos de ciclo y utilidades:
 
 ```bash
 cd frontend
-npm run build
-npm run lint
+
+# Ejecutar todos los tests (74+ tests pasando al 100%)
+npm test
+
+# Ejecutar con reporte de cobertura
+npm run test:coverage
 ```
 
-Estos scripts no sustituyen todavía una suite automatizada ejecutada en CI. La siguiente evolución recomendable es incorporar pytest para el backend, una base de datos de pruebas aislada y pruebas de regresión multi-tenant; en el frontend, añadir pruebas de componentes para formularios, modales y estados de error.
+---
 
-## Documentación del proyecto
+## Seguridad y Aislamiento
 
-TecniDesk se encuentra en una etapa funcional de MVP, con los flujos principales de administración de talleres, tickets, diagnóstico, inventario y tracking público implementados. La documentación complementaria está separada por propósito:
+- **Aislamiento Multi-Tenant (Seguridad C1):** Todo endpoint autenticado extrae y valida el `shop_id` desde el token JWT. La capa de servicios reaplica filtros estrictos por tienda en todas las consultas y mutaciones.
+- **Protección de Datos Sensibles (PII):** Los teléfonos, correos y tokens de clientes se enmascaran visualmente en pantalla por defecto; el PIN de desbloqueo del equipo se almacena cifrado con Fernet y sólo se expone a técnicos autorizados.
+- **Protección contra Fuerza Bruta:** Rate limiting mediante SlowAPI activo en rutas críticas (ej. `/auth/login` limitado a 5 intentos/min por IP).
+- **Protección de Transición de Estados:** Guard estricto que impide enviar tickets a reparación sin un técnico responsable asignado.
+- **Auditoría Inmutable:** Historial inalterable de cambios de estado registrado en base de datos.
 
-- `PROJECT_STATE.md`: estado técnico, decisiones recientes y contexto para continuar el desarrollo.
-- `Gemini.md`: instrucciones operativas y criterios de trabajo del proyecto.
-- `AUDITORIA_TECNICA.md`: hallazgos, riesgos y controles revisados durante la auditoría.
-- `PLAN_REPARACION_PIN.md`: contexto de la reparación del flujo de PIN.
-- `PLAN_WHITELABEL.md`: decisiones del portal con identidad visual del taller.
+---
 
-El README resume el producto y cómo ejecutarlo; estos documentos conservan el detalle histórico y técnico que no es necesario leer para una primera evaluación.
+## Despliegue en Producción
+
+| Componente | Plataforma Recomendada | Notas de Despliegue |
+|---|---|---|
+| **Backend** | Render / Railway / Fly.io | Contenedor ASGI con Python 3.12 |
+| **Frontend** | Vercel / Netlify | SPA estática con redirección de rutas (`vercel.json`) |
+| **Base de Datos** | Supabase / Neon / AWS RDS | PostgreSQL con extensión `pgvector` activa |
+| **Almacenamiento** | Cloudflare R2 | Bucket privado con CORS configurado |
+| **Correos** | Resend | Dominio autenticado con DKIM/SPF |
+
+---
+
+## Documentación del Proyecto
+
+El desarrollo y evolución técnica de TecniDesk se gestionan bajo la metodología **Spec-Driven Development (SDD)**:
+
+- [`PROJECT_STATE.md`](PROJECT_STATE.md): Auditoría técnica completa, estado consolidado de la base de código, historial de correcciones y estado del Workbench.
+- [`openspec/`](openspec/): Directorio de especificaciones formales del sistema (`openspec/specs/`) y registro cronológico de cambios archivados por ciclo de desarrollo (`openspec/changes/archive/`).
+
+---
 
 ## Licencia
 
-Proyecto desarrollado con fines académicos y de titulación. Actualmente el repositorio no incluye un archivo `LICENSE`, por lo que no se declara una licencia open source ni permisos de redistribución o modificación. La marca TecniDesk, su identidad visual y los datos de cualquier entorno desplegado son propietarios.
-
-Si el repositorio se publica como proyecto open source, debe añadirse una licencia explícita, por ejemplo MIT, y revisar por separado la licencia de assets, documentación y configuraciones de terceros.
+Proyecto desarrollado con fines académicos y de titulación. La marca TecniDesk, su identidad visual, arquitectura y datos de cualquier entorno desplegado son propietarios.

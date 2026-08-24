@@ -11,7 +11,7 @@ import time
 import uuid
 import magic
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,14 @@ from app.services.storage_service import upload_evidence_image
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from app.models.subscription import Subscription, SubscriptionStatusEnum
-from app.core.dependencies import subscription_guard, get_current_user, superadmin_key_guard
+from app.core.dependencies import (
+    admin_guard,
+    get_current_user,
+    subscription_guard,
+    superadmin_key_guard,
+    verify_ticket_technician_access,
+)
+from app.core.rate_limit import get_user_rate_limit_key, limiter
 from app.database import get_db
 from app.models.ticket import TicketStatusEnum
 from app.models.user import User
@@ -109,6 +116,8 @@ async def list_tickets(
     filter_group: str | None = Query(None, description="Filtro agrupado ('activos')"),
     search: str | None = Query(None, description="Término de búsqueda general"),
     date_range: str | None = Query(None, description="Filtra por fecha, ej. 2026-01-01,2026-01-31"),
+    technician_id: uuid.UUID | None = Query(None, description="Filtra por técnico asignado"),
+    unassigned_only: bool = Query(False, description="Filtra solo tickets sin asignar"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200, description="Cantidad máxima a retornar (cap: 200)"),
     current_user: User = Depends(subscription_guard),
@@ -122,7 +131,9 @@ async def list_tickets(
         status=ticket_status,
         filter_group=filter_group,
         search=search,
-        date_range=date_range
+        date_range=date_range,
+        technician_id=technician_id,
+        unassigned_only=unassigned_only,
     )
     return PaginatedResponse(items=items, total=total)
 
@@ -160,7 +171,7 @@ async def get_ticket_stats(
 )
 async def get_cycle_time_analytics(
     days: int = Query(30, ge=1, le=365, description="Ventana de tiempo en días"),
-    current_user: User = Depends(subscription_guard),
+    current_user: User = Depends(admin_guard),
     db: AsyncSession = Depends(get_db),
 ):
     return await ticket_service.get_workshop_cycle_time_metrics(
@@ -212,6 +223,7 @@ async def update_ticket_status(
     payload: TicketStatusUpdateIn,
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
 ):
     try:
         return await ticket_service.update_ticket_status(
@@ -322,6 +334,65 @@ async def assign_technician(
         # El usuario no tiene rol para ser asignado
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+        ) from e
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6.b POST /tickets/{ticket_id}/assign-me
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/{ticket_id}/assign-me",
+    response_model=TicketResponse,
+    summary="Auto-asignar Ticket",
+    description="Asigna el ticket al técnico autenticado si está sin asignar o ya le pertenece.",
+)
+async def assign_me(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await ticket_service.assign_me_ticket(
+            db=db,
+            ticket_id=ticket_id,
+            shop_id=current_user.shop_id,
+            user=current_user,
+        )
+    except TicketNotFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        ) from e
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6.c POST /tickets/{ticket_id}/reveal-pin
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/{ticket_id}/reveal-pin",
+    summary="Revelar PIN del Dispositivo",
+    description="Audita y retorna el PIN o contraseña desencriptada del dispositivo.",
+)
+@limiter.limit("15/minute", key_func=get_user_rate_limit_key)
+async def reveal_pin(
+    request: Request,
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
+):
+    try:
+        pin = await ticket_service.reveal_ticket_pin(
+            db=db,
+            ticket_id=ticket_id,
+            shop_id=current_user.shop_id,
+            user=current_user,
+        )
+        return {"device_password": pin, "pin": pin}
+    except TicketNotFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
         ) from e
 
 
@@ -450,6 +521,7 @@ async def update_diagnostic(
     payload: TicketDiagnosticUpdate,
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
 ):
     try:
         return await ticket_service.update_ticket_diagnostic(
@@ -538,9 +610,6 @@ async def diagnose_ticket(
             ticket_id=ticket_id
         )
         
-        # We need the DiagnosticCase objects, not RetrievedCase
-        # Wait, the prompt for build_prompt needs DiagnosticCase.
-        # Let's map RetrievedCase back to a struct that ExplanationService expects.
         class SimpleCase:
             def __init__(self, id, device_brand, device_model, symptom_text, diagnosed_cause, solution_applied, source_type):
                 self.id = id
@@ -576,8 +645,6 @@ async def diagnose_ticket(
         
         # If generation failed verify, update the log that was just created
         if not diagnosis.had_sufficient_evidence and search_result.had_sufficient_evidence:
-            # The search logged sufficient = True, but LLM failed to verify
-            # We can update the last log for this ticket
             stmt = select(DiagnosticQueryLog).where(
                 DiagnosticQueryLog.ticket_id == ticket_id
             ).order_by(DiagnosticQueryLog.created_at.desc()).limit(1)
@@ -608,11 +675,14 @@ from app.services.correction_service import CorrectionService
     summary="Chat con el asistente sobre el diagnóstico",
     description="Agrega un mensaje del técnico y retorna la respuesta del asistente.",
 )
+@limiter.limit("25/minute", key_func=get_user_rate_limit_key)
 async def diagnostic_chat(
+    request: Request,
     ticket_id: uuid.UUID,
     payload: DiagnosticMessageIn,
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
 ):
     try:
         # Check ticket exists
@@ -643,6 +713,7 @@ async def diagnostic_chat_confirm(
     payload: ConfirmCorrectionIn,
     current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
 ):
     try:
         ticket = await ticket_service.get_ticket_by_id(

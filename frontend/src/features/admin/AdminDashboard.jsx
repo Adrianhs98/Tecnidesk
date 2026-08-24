@@ -213,7 +213,7 @@ export default function AdminDashboard() {
             <BarChart3 size={16} className="inline-icon" /> Métricas y Tiempos
           </button>
           <button className="btn-secondary" onClick={() => setShowSlaSettings(true)}>
-            <Sliders size={16} className="inline-icon" /> Configurar SLAs
+            <Sliders size={16} className="inline-icon" /> Tiempos y Alertas
           </button>
           <button className="btn-secondary" onClick={() => setShowTechnicians(true)}>
             <Users size={16} className="inline-icon" /> Técnicos

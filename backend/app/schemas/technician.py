@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TechnicianCreate(BaseModel):
@@ -13,6 +13,8 @@ class TechnicianCreate(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=200, description="Nombre completo del técnico")
     contact: str | None = Field(None, max_length=100, description="Teléfono o contacto")
     declared_specialty: str | None = Field(None, max_length=200, description="Especialidad declarada")
+    email: EmailStr | None = Field(None, description="Email del técnico para login")
+    password: str | None = Field(None, min_length=8, description="Contraseña de acceso")
 
 
 class TechnicianUpdate(BaseModel):
@@ -62,3 +64,18 @@ class TechnicianMetricsTable(BaseModel):
     """Respuesta del endpoint GET /technicians/metrics"""
     technicians: list[TechnicianWithMetrics]
     shop_totals: ShopTotals
+
+
+class TechnicianMeResponse(BaseModel):
+    """Perfil del técnico autenticado para el portal de técnicos."""
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    full_name: str
+    email: str | None = None
+    role: str
+    declared_specialty: str | None = None
+    inferred_specialties: list[InferredSpecialty] = []
+    active_tickets_count: int = 0
+    completed_tickets_count: int = 0
+
+    model_config = {"from_attributes": True}
