@@ -1,3 +1,4 @@
+// Core application router and query client configuration
 import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

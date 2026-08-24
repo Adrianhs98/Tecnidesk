@@ -2,6 +2,7 @@
 Punto de entrada principal de la aplicación TecniDesk.
 Configura FastAPI, CORS y registra todos los routers.
 """
+# Application entrypoint and middleware configuration
 import logging
 import uuid
 from contextlib import asynccontextmanager
