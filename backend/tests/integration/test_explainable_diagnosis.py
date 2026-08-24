@@ -36,10 +36,13 @@ async def test_explanation_generation_success(retrieved_cases, monkeypatch):
         
     class MockClient:
         def __init__(self, *args, **kwargs):
-            self.models = self.Models()
-        class Models:
-            def generate_content(self, *args, **kwargs):
-                return MockResponse()
+            self.aio = self.Aio()
+        class Aio:
+            def __init__(self):
+                self.models = self.Models()
+            class Models:
+                async def generate_content(self, *args, **kwargs):
+                    return MockResponse()
 
     monkeypatch.setattr("google.genai.Client", MockClient)
 
@@ -64,10 +67,13 @@ async def test_explanation_generation_hallucinated_fields(retrieved_cases, monke
         
     class MockClient:
         def __init__(self, *args, **kwargs):
-            self.models = self.Models()
-        class Models:
-            def generate_content(self, *args, **kwargs):
-                return MockResponse()
+            self.aio = self.Aio()
+        class Aio:
+            def __init__(self):
+                self.models = self.Models()
+            class Models:
+                async def generate_content(self, *args, **kwargs):
+                    return MockResponse()
 
     monkeypatch.setattr("google.genai.Client", MockClient)
 

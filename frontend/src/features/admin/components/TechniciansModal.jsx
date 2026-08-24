@@ -10,7 +10,7 @@ export default function TechniciansModal({ onClose }) {
   const [error, setError] = useState(null);
   
   const [view, setView] = useState("list"); // 'list' | 'form'
-  const [formData, setFormData] = useState({ id: null, full_name: "", contact: "", declared_specialty: "" });
+  const [formData, setFormData] = useState({ id: null, full_name: "", contact: "", declared_specialty: "", email: "", generate_access: false });
   const [formLoading, setFormLoading] = useState(false);
 
   const fetchMetrics = async () => {
@@ -45,6 +45,11 @@ export default function TechniciansModal({ onClose }) {
         declared_specialty: formData.declared_specialty || null
       };
 
+      if (!isEdit && formData.generate_access) {
+        payload.generate_access = true;
+        payload.email = formData.email;
+      }
+
       const res = await authFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -62,6 +67,28 @@ export default function TechniciansModal({ onClose }) {
       alert(err.message);
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const handleGenerateAccess = async (techId) => {
+    const email = window.prompt("Ingrese el correo del técnico para generar su acceso:");
+    if (!email) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/technicians/${techId}/access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Error al generar acceso");
+      }
+      alert("Acceso generado exitosamente.");
+      fetchMetrics();
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -156,11 +183,16 @@ export default function TechniciansModal({ onClose }) {
             
             <div style={{ display: "flex", gap: "8px", flexDirection: "column" }}>
               <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => {
-                setFormData({ id: tech.id, full_name: tech.full_name, contact: tech.contact || "", declared_specialty: tech.declared_specialty || "" });
+                setFormData({ id: tech.id, full_name: tech.full_name, contact: tech.contact || "", declared_specialty: tech.declared_specialty || "", email: "", generate_access: false });
                 setView("form");
               }} title="Editar Técnico">
                 <Edit size={14} />
               </button>
+              {tech.is_active && !tech.user_id && (
+                <button className="btn-secondary" style={{ padding: "6px 10px", color: "var(--accent)", borderColor: "var(--accent)" }} onClick={() => handleGenerateAccess(tech.id)} title="Generar acceso">
+                  <Users size={14} />
+                </button>
+              )}
               {tech.is_active ? (
                 <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => handleDeactivate(tech.id)} title="Desactivar Técnico">
                   <Trash2 size={14} />
@@ -212,6 +244,38 @@ export default function TechniciansModal({ onClose }) {
           placeholder="Ej: Microsoldadura, Apple, Pantallas"
         />
       </div>
+      
+      {!formData.id && (
+        <div className="form-group" style={{ background: "var(--surface2)", padding: "16px", borderRadius: "12px", border: "1px solid var(--border)", marginTop: "8px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "var(--text1)", fontWeight: "500", fontSize: "14px" }}>
+            <input 
+              type="checkbox" 
+              checked={formData.generate_access}
+              onChange={e => setFormData({...formData, generate_access: e.target.checked})}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            Grant system access (Generar acceso al sistema)
+          </label>
+          
+          {formData.generate_access && (
+            <div style={{ marginTop: "16px" }}>
+              <label className="form-label">Correo Electrónico *</label>
+              <input 
+                required 
+                type="email"
+                className="form-input" 
+                value={formData.email} 
+                onChange={e => setFormData({...formData, email: e.target.value})} 
+                placeholder="correo@ejemplo.com"
+              />
+              <p style={{ fontSize: "12px", color: "var(--text3)", marginTop: "6px" }}>
+                Se enviará un correo con las credenciales de acceso a esta dirección.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
         <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setView("list")} disabled={formLoading}>Cancelar</button>
         <button type="submit" className="btn-primary" style={{ flex: 1 }} disabled={formLoading}>
@@ -237,7 +301,7 @@ export default function TechniciansModal({ onClose }) {
           <div style={{ display: "flex", gap: "12px" }}>
             {view === "list" && (
               <button className="btn-new-ticket" onClick={() => {
-                setFormData({ id: null, full_name: "", contact: "", declared_specialty: "" });
+                setFormData({ id: null, full_name: "", contact: "", declared_specialty: "", email: "", generate_access: false });
                 setView("form");
               }} style={{ padding: "8px 16px", fontSize: "13px" }}>
                 + Nuevo Técnico

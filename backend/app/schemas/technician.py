@@ -14,7 +14,7 @@ class TechnicianCreate(BaseModel):
     contact: str | None = Field(None, max_length=100, description="Teléfono o contacto")
     declared_specialty: str | None = Field(None, max_length=200, description="Especialidad declarada")
     email: EmailStr | None = Field(None, description="Email del técnico para login")
-    password: str | None = Field(None, min_length=8, description="Contraseña de acceso")
+    generate_access: bool = Field(False, description="Generar y enviar credenciales de acceso")
 
 
 class TechnicianUpdate(BaseModel):
@@ -24,9 +24,15 @@ class TechnicianUpdate(BaseModel):
     declared_specialty: str | None = Field(None, max_length=200)
 
 
+class TechnicianAccessCreate(BaseModel):
+    """Payload para generar acceso a un técnico existente."""
+    email: EmailStr = Field(..., description="Email del técnico para login")
+
+
 class TechnicianResponse(BaseModel):
     """Respuesta estándar para un técnico."""
     id: uuid.UUID
+    user_id: uuid.UUID | None = None
     full_name: str
     contact: str | None
     declared_specialty: str | None

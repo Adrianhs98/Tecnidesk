@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.technician import (
     TechnicianCreate,
+    TechnicianAccessCreate,
     TechnicianMeResponse,
     TechnicianMetricsTable,
     TechnicianResponse,
@@ -62,6 +63,10 @@ async def create_technician(
         return await technician_service.create_technician(db, current_user.shop_id, data)
     except technician_service.TechnicianDuplicate as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        if "Fallo al enviar correo" in str(e):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise
 
 
 @router.get("/metrics", response_model=TechnicianMetricsTable)
@@ -87,6 +92,37 @@ async def get_technician(
     if not tech:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Técnico no encontrado.")
     return tech
+
+
+@router.post("/{id}/access", response_model=TechnicianResponse)
+async def generate_technician_access(
+    id: uuid.UUID,
+    data: TechnicianAccessCreate,
+    current_user: User = Depends(admin_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    """Genera acceso al sistema para un técnico existente. Solo administradores."""
+    tech = await technician_service.get_technician_by_id(db, id, current_user.shop_id)
+    if not tech:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Técnico no encontrado.")
+    if not tech.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se puede generar acceso a un técnico inactivo.")
+    if tech.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El técnico ya tiene acceso al sistema.")
+
+    try:
+        await technician_service.grant_technician_access(db, current_user.shop_id, tech, str(data.email))
+        await db.commit()
+        await db.refresh(tech)
+        return tech
+    except technician_service.TechnicianDuplicate as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        if "Fallo al enviar correo" in str(e):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise
 
 
 @router.patch("/{id}", response_model=TechnicianResponse)

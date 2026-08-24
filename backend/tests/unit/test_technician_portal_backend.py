@@ -13,7 +13,7 @@ Tests include:
 import uuid
 from datetime import datetime, timezone
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi import Request
 
 from app.main import app
@@ -108,10 +108,13 @@ async def test_create_technician_with_user_account(db_session):
         contact="0999999999",
         declared_specialty="Smartphones",
         email="tech_linked@test.com",
-        password="SecurePassword123!",
+        generate_access=True,
     )
 
-    tech = await technician_service.create_technician(db_session, shop_id, tech_data)
+    with patch("app.services.email_service.send_technician_credentials_email", new_callable=AsyncMock) as mock_email:
+        mock_email.return_value = True
+        tech = await technician_service.create_technician(db_session, shop_id, tech_data)
+
     assert tech.id is not None
     assert tech.user_id is not None
     assert tech.full_name == "Tech Auto Linked"

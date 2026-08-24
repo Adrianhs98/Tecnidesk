@@ -53,7 +53,7 @@ class ExplanationService:
         
         prompt = ExplanationService._build_prompt(symptom, retrieved_cases)
         
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model="gemini-3.7-flash",
             contents=prompt,
             config=types.GenerateContentConfig(

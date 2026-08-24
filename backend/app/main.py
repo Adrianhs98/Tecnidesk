@@ -2,8 +2,9 @@
 Punto de entrada principal de la aplicación TecniDesk.
 Configura FastAPI, CORS y registra todos los routers.
 """
-# Application entrypoint and middleware configuration
+# Application entrypoint and router configuration
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 
@@ -62,6 +63,18 @@ async def embedding_service_unavailable_handler(request: Request, exc: Embedding
         },
     )
 
+# ---------------- CORS Helper ----------------
+_prod_regex = r"^https://(.*\.+)?(tecnidesk\.lat|adriansaas\.xyz)$"
+_prod_regex_compiled = re.compile(_prod_regex)
+
+def _is_allowed_origin(origin: str) -> bool:
+    if not origin:
+        return False
+    allowed = settings.dev_origins + [settings.frontend_url.strip("/")]
+    if origin in allowed:
+        return True
+    return bool(_prod_regex_compiled.fullmatch(origin))
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
@@ -71,17 +84,25 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     request_id = str(uuid.uuid4())
     logger.error(f"Unhandled exception [req_id={request_id}] en {request.url.path}: {exc}", exc_info=True)
+    
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin and _is_allowed_origin(origin):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "Error interno del servidor.",
+            "detail": "Internal server error. Revisa los logs.",
             "request_id": request_id,
-        }
+            "error_type": exc.__class__.__name__,
+        },
+        headers=headers,
     )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 # Producción: solo subdominios de tecnidesk.lat y adriansaas.xyz (y dominios raíz)
-_prod_regex = r"^https://(.*\.+)?(tecnidesk\.lat|adriansaas\.xyz)$"
 
 app.add_middleware(
     CORSMiddleware,

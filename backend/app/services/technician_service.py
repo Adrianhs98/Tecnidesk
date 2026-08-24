@@ -31,50 +31,101 @@ class TechnicianNotFound(Exception):
     pass
 
 
+async def grant_technician_access(
+    db: AsyncSession, shop_id: uuid.UUID, technician: Technician, email: str
+) -> User:
+    """
+    Generates system access for a technician. Creates a user, links it, and sends credentials.
+    """
+    from app.core.security import hash_password, generate_random_password
+    from app.services import email_service
+    from app.config import get_settings
+    
+    settings = get_settings()
+
+    # Verify if email exists
+    existing_user = await db.execute(select(User).where(User.email == email))
+    if existing_user.scalar_one_or_none() is not None:
+        raise TechnicianDuplicate("El email ya está registrado para otro usuario.")
+
+    # Get Shop name
+    from app.models.shop import Shop
+    shop = await db.get(Shop, shop_id)
+    shop_name = shop.business_name if shop else "TecniDesk"
+
+    # Generate password
+    plain_pass = generate_random_password(12)
+    
+    # Create user
+    user = User(
+        shop_id=shop_id,
+        role=UserRoleEnum.technician,
+        full_name=technician.full_name,
+        email=email,
+        password_hash=hash_password(plain_pass),
+        is_active=True,
+    )
+    db.add(user)
+    
+    try:
+        await db.flush()
+        technician.user_id = user.id
+        await db.flush()
+        
+        # Send credentials via Resend
+        login_url = f"{settings.frontend_url.rstrip('/')}/login"
+        await email_service.send_technician_credentials_email(
+            to_email=email,
+            password=plain_pass,
+            shop_name=shop_name,
+            login_url=login_url
+        )
+        
+        # If everything succeeds, the caller (or router) commits the transaction.
+        # However, for endpoints using this directly, we could commit here if it's safe.
+        # But we leave it up to the dependency to commit since get_db commits on success.
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, IntegrityError):
+            raise TechnicianDuplicate("Error al crear la cuenta de usuario para el técnico.")
+        # Re-raise the exception from email_service
+        raise Exception("Fallo al enviar correo, acceso no generado") from e
+
+    return user
+
+
 async def create_technician(
     db: AsyncSession, shop_id: uuid.UUID, data: TechnicianCreate
 ) -> Technician:
-    user_id = None
-    if data.email:
-        # Verificar si el email ya existe
-        existing_user = await db.execute(select(User).where(User.email == str(data.email)))
-        if existing_user.scalar_one_or_none() is not None:
-            raise TechnicianDuplicate("El email ya está registrado para otro usuario.")
-
-        from app.core.security import hash_password, generate_random_password
-        plain_pass = data.password if data.password else generate_random_password(12)
-        user = User(
-            shop_id=shop_id,
-            role=UserRoleEnum.technician,
-            full_name=data.full_name,
-            email=str(data.email),
-            password_hash=hash_password(plain_pass),
-            is_active=True,
-        )
-        db.add(user)
-        try:
-            await db.flush()
-            user_id = user.id
-        except IntegrityError:
-            await db.rollback()
-            raise TechnicianDuplicate("Error al crear la cuenta de usuario para el técnico.")
-
     tech = Technician(
         shop_id=shop_id,
         full_name=data.full_name,
         contact=data.contact,
         declared_specialty=data.declared_specialty,
         is_active=True,
-        user_id=user_id,
     )
     db.add(tech)
     try:
-        await db.commit()
-        await db.refresh(tech)
+        await db.flush()
     except IntegrityError:
         await db.rollback()
         raise TechnicianDuplicate("Ya existe un técnico con ese nombre en este taller.")
+        
+    if data.email and getattr(data, "generate_access", False):
+        try:
+            await grant_technician_access(db, shop_id, tech, str(data.email))
+        except Exception:
+            raise
+
+    try:
+        await db.commit()
+        await db.refresh(tech)
+    except Exception:
+        await db.rollback()
+        raise
+        
     return tech
+
 
 
 async def get_technicians(

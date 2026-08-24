@@ -298,7 +298,16 @@ async def create_ticket(
             reason="Creación de la orden de reparación",
         )
         await db.commit()
-        await db.refresh(ticket)
+        # Reload with eager-loaded relations to avoid MissingGreenlet on serialization
+        refreshed = await db.execute(
+            select(Ticket)
+            .where(Ticket.id == ticket.id)
+            .options(
+                selectinload(Ticket.customer),
+                selectinload(Ticket.technician),
+            )
+        )
+        ticket = refreshed.scalar_one()
     except Exception:
         await db.rollback()
         raise

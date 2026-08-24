@@ -77,10 +77,10 @@ async def preview_diagnosis(
     # Just do a quick retrieval without heavy LLM thinking
     search_result = await search_similar_cases(
         db=db,
-        shop_id=UUID(shop_id),
-        brand=payload.brand,
-        model=payload.model,
-        symptom=payload.symptom
+        shop_id=shop_id,  # already a UUID from current_user.shop_id
+        device_brand=payload.brand,
+        device_model=payload.model,
+        symptom_text=payload.symptom,
     )
     if not search_result.had_sufficient_evidence or not search_result.cases:
         return {"suggestion": "No hay suficientes casos similares para sugerir."}

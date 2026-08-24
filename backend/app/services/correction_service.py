@@ -78,7 +78,7 @@ class CorrectionService:
         settings = get_settings()
         client = genai.Client(api_key=settings.gemini_api_key)
         
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model="gemini-3.7-flash",
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.0)

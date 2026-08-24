@@ -154,12 +154,16 @@ async def test_handle_chat_message_stores_and_replies(db_session, monkeypatch):
         text = "I understand. The charging IC could indeed be the issue. Let me adjust the diagnosis."
 
     class MockModels:
-        def generate_content(self, *args, **kwargs):
+        async def generate_content(self, *args, **kwargs):
             return MockResponse()
+
+    class MockAio:
+        def __init__(self):
+            self.models = MockModels()
 
     class MockClient:
         def __init__(self, *args, **kwargs):
-            self.models = MockModels()
+            self.aio = MockAio()
 
     monkeypatch.setattr("app.services.correction_service.genai.Client", MockClient)
 

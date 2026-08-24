@@ -5,6 +5,7 @@ Integra con Resend para el envío de correos electrónicos transaccionales.
 """
 import resend
 from typing import Any
+from starlette.concurrency import run_in_threadpool
 
 from app.models.ticket import Ticket
 from app.models.shop import Shop
@@ -57,12 +58,15 @@ async def send_ticket_email(to_email: str, ticket: Ticket, shop: Shop) -> bool:
         </div>
         """
         
-        response = resend.Emails.send({
-            "from": settings.mail_from,
-            "to": to_email,
-            "subject": f"Ticket de Reparación Ingresado - {shop.business_name}",
-            "html": html_body
-        })
+        response = await run_in_threadpool(
+            resend.Emails.send,
+            {
+                "from": settings.mail_from,
+                "to": to_email,
+                "subject": f"Ticket de Reparación Ingresado - {shop.business_name}",
+                "html": html_body
+            }
+        )
         print(f"✅ Email enviado exitosamente vía Resend a {to_email}: {response}")
         return True
     
@@ -118,12 +122,15 @@ async def send_approval_email(to_email: str, ticket: Ticket, shop: Shop) -> bool
         </div>
         """
 
-        response = resend.Emails.send({
-            "from": settings.mail_from,
-            "to": to_email,
-            "subject": f"✅ Cliente aprobó el presupuesto - {ticket.device_brand} {ticket.device_model}",
-            "html": html_body
-        })
+        response = await run_in_threadpool(
+            resend.Emails.send,
+            {
+                "from": settings.mail_from,
+                "to": to_email,
+                "subject": f"✅ Cliente aprobó el presupuesto - {ticket.device_brand} {ticket.device_model}",
+                "html": html_body
+            }
+        )
         print(f"✅ Email de aprobación enviado a {to_email}: {response}")
         return True
 
@@ -163,12 +170,15 @@ async def send_password_reset_email(to_email: str, reset_link: str) -> bool:
         </div>
         """
 
-        response = resend.Emails.send({
-            "from": settings.mail_from,
-            "to": to_email,
-            "subject": "Recupera tu contraseña - TecniDesk",
-            "html": html_body
-        })
+        response = await run_in_threadpool(
+            resend.Emails.send,
+            {
+                "from": settings.mail_from,
+                "to": to_email,
+                "subject": "Recupera tu contraseña - TecniDesk",
+                "html": html_body
+            }
+        )
         print(f"✅ Email de recuperación enviado a {to_email}: {response}")
         return True
 
@@ -237,16 +247,75 @@ async def send_quote_ready_email(email: str, tracking_url: str, device_model: st
         </div>
         """
 
-        response = resend.Emails.send({
-            "from": settings.mail_from,
-            "to": email,
-            "subject": f"🔧 Presupuesto listo para tu {device_model} - Revisión pendiente",
-            "html": html_body
-        })
+        response = await run_in_threadpool(
+            resend.Emails.send,
+            {
+                "from": settings.mail_from,
+                "to": email,
+                "subject": f"🔧 Presupuesto listo para tu {device_model} - Revisión pendiente",
+                "html": html_body
+            }
+        )
         print(f"✅ Email de presupuesto enviado a {email}: {response}")
         return True
 
     except Exception as e:
         print(f"❌ Error al enviar email de presupuesto a {email}: {str(e)}")
         return False
+
+
+async def send_technician_credentials_email(to_email: str, password: str, shop_name: str, login_url: str) -> bool:
+    """
+    Envía un correo con las credenciales de acceso para un nuevo técnico.
+    """
+    try:
+        if not settings.resend_api_key:
+            print(f"⚠️ RESEND_API_KEY no configurado. Credenciales para {to_email}: {password}")
+            return False
+
+        html_body = f"""
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #eeeeee;">
+                <h1 style="color: #333333; margin: 0; font-size: 24px;">Acceso a TecniDesk - {shop_name}</h1>
+            </div>
+            <div style="padding: 20px 0;">
+                <p style="color: #555555; font-size: 16px; line-height: 1.5;">Hola,</p>
+                <p style="color: #555555; font-size: 16px; line-height: 1.5;">Se te ha dado acceso al sistema de gestión de taller <strong>{shop_name}</strong> en TecniDesk.</p>
+                <p style="color: #555555; font-size: 16px; line-height: 1.5;">Tus credenciales de acceso son:</p>
+                
+                <div style="background-color: #f8f9fa; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <p style="margin: 4px 0; color: #333;"><strong>Email:</strong> {to_email}</p>
+                    <p style="margin: 4px 0; color: #333;"><strong>Contraseña:</strong> {password}</p>
+                </div>
+                
+                <p style="color: #555555; font-size: 16px; line-height: 1.5;">Te recomendamos cambiar tu contraseña una vez que ingreses al sistema.</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{login_url}" style="background-color: #0070f3; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Iniciar Sesión</a>
+                </div>
+                
+                <p style="color: #777777; font-size: 14px; line-height: 1.5;">O copia y pega este enlace en tu navegador:<br><a href="{login_url}" style="color: #0070f3;">{login_url}</a></p>
+            </div>
+            <div style="text-align: center; padding-top: 20px; border-top: 1px solid #eeeeee; color: #999999; font-size: 12px;">
+                Este es un mensaje automático de TecniDesk.
+            </div>
+        </div>
+        """
+
+        response = await run_in_threadpool(
+            resend.Emails.send,
+            {
+                "from": settings.mail_from,
+                "to": to_email,
+                "subject": f"Credenciales de acceso - {shop_name}",
+                "html": html_body
+            }
+        )
+        print(f"✅ Email de credenciales enviado a {to_email}: {response}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error al enviar email de credenciales a {to_email}: {str(e)}")
+        # Raise an error instead of returning false because we want it to fail the transaction
+        raise e
 
