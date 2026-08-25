@@ -3512,6 +3512,11 @@ select:focus-visible {
   gap: 10px;
   color: var(--text-tertiary);
   font-size: 12px;
+  transition: color 0.3s ease;
+}
+
+.ai-thinking-bubble.retrying {
+  color: #f59e0b;
 }
 
 .ai-thinking-dots {

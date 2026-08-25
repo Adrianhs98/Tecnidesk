@@ -105,7 +105,7 @@ def mock_db_session(mock_shops):
 
 def test_get_sla_config_success(mock_admin_user, mock_db_session):
     """GET /shops/sla-config returns 200 with effective, custom, and default SLA hours."""
-    app.dependency_overrides[admin_guard] = lambda: mock_admin_user
+    app.dependency_overrides[subscription_guard] = lambda: mock_admin_user
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
     try:
@@ -175,21 +175,23 @@ def test_patch_sla_config_validation_errors(mock_admin_user, mock_db_session):
 
 
 def test_sla_config_rbac_non_admin_forbidden(mock_tech_user, mock_db_session):
-    """Technicians or non-admins cannot access GET or PATCH /shops/sla-config (403)."""
+    """Technicians can read GET /shops/sla-config (200), but cannot modify PATCH /shops/sla-config (403)."""
     async def tech_admin_guard():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol de administrador para esta acción.",
         )
 
+    app.dependency_overrides[subscription_guard] = lambda: mock_tech_user
     app.dependency_overrides[admin_guard] = tech_admin_guard
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
     try:
         client = TestClient(app)
         get_res = client.get("/shops/sla-config")
-        assert get_res.status_code == 403
-        assert "administrador" in get_res.json()["detail"]
+        assert get_res.status_code == 200
+        data = get_res.json()
+        assert "effective_thresholds" in data
 
         patch_res = client.patch("/shops/sla-config", json={"custom_thresholds": {"EN_REVISION": 10}})
         assert patch_res.status_code == 403
@@ -206,7 +208,7 @@ def test_sla_config_unauthenticated_unauthorized(mock_db_session):
             detail="Token no proporcionado o inválido.",
         )
 
-    app.dependency_overrides[admin_guard] = unauth_guard
+    app.dependency_overrides[subscription_guard] = unauth_guard
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
     try:

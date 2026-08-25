@@ -104,7 +104,21 @@ export default function AiChatDrawer({
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+
+  // Dynamic loading message if request takes > 3.5s due to server-side retries
+  useEffect(() => {
+    let timer;
+    if (isSending) {
+      timer = setTimeout(() => {
+        setIsRetrying(true);
+      }, 3500);
+    } else {
+      setIsRetrying(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isSending]);
 
   // RAG learning modal/inline state
   const [showRagForm, setShowRagForm] = useState(false);
@@ -357,13 +371,17 @@ export default function AiChatDrawer({
 
           {isSending && (
             <div className="ai-msg-wrap assistant">
-              <div className="ai-msg-bubble ai-thinking-bubble">
+              <div className={`ai-msg-bubble ai-thinking-bubble ${isRetrying ? "retrying" : ""}`}>
                 <div className="ai-thinking-dots">
                   <span />
                   <span />
                   <span />
                 </div>
-                <span className="ai-thinking-label">Analizando esquemas y base de conocimiento...</span>
+                <span className="ai-thinking-label">
+                  {isRetrying
+                    ? "Ohm está experimentando alta demanda, reintentando conexión..."
+                    : "Analizando esquemas y base de conocimiento..."}
+                </span>
               </div>
             </div>
           )}

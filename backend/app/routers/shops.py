@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import admin_guard
+from app.core.dependencies import admin_guard, subscription_guard
 from app.database import get_db
 from app.models.user import User
 from app.schemas.shop import (
@@ -77,12 +77,12 @@ async def create_shop_endpoint(
     description="Retorna los umbrales efectivos, configuraciones personalizadas y defaults del sistema.",
 )
 async def get_shop_sla_config_endpoint(
-    current_user: User = Depends(admin_guard),
+    current_user: User = Depends(subscription_guard),
     db: AsyncSession = Depends(get_db),
 ) -> SlaConfigResponse:
     """
     GET /shops/sla-config
-    Requiere rol de administrador y suscripción activa.
+    Requiere usuario activo del taller y suscripción activa.
     """
     try:
         config = await get_shop_sla_config(db, current_user.shop_id)

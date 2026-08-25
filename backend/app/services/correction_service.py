@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import json
 from datetime import datetime
@@ -5,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import logging
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 from app.config import get_settings
 from app.models.diagnostic import DiagnosticConversation, DiagnosticMessage, DiagnosticCase, DiagnosticQueryLog
@@ -78,13 +79,43 @@ class CorrectionService:
         settings = get_settings()
         client = genai.Client(api_key=settings.gemini_api_key)
         
-        response = await client.aio.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.0)
-        )
-        
-        ai_reply = response.text or "I understand. Let's adjust the diagnosis."
+        # Retry with exponential backoff for 503 ServerError
+        retries = 3
+        backoff_delays = [1.0, 2.0, 4.0]
+        response = None
+        for attempt in range(retries):
+            try:
+                response = await client.aio.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.0)
+                )
+                break
+            except Exception as e:
+                is_503 = (
+                    (isinstance(e, errors.APIError) and e.code == 503)
+                    or getattr(e, "code", None) == 503
+                    or getattr(e, "status_code", None) == 503
+                    or "503" in str(e)
+                )
+                if is_503 and attempt < retries - 1:
+                    logger.warning(f"Gemini 503 Service Unavailable on attempt {attempt + 1}/{retries}. Retrying in {backoff_delays[attempt]}s...")
+                    await asyncio.sleep(backoff_delays[attempt])
+                    continue
+                elif is_503:
+                    logger.error(f"Gemini 503 Service Unavailable exhausted all {retries} retries.")
+                    ai_reply = "Servicio de Ohm no disponible temporalmente por alta demanda (503). Por favor intenta de nuevo en unos momentos."
+                    break
+                else:
+                    raise e
+        else:
+            if response is None:
+                ai_reply = "Servicio de Ohm no disponible temporalmente por alta demanda (503). Por favor intenta de nuevo en unos momentos."
+            else:
+                ai_reply = response.text or "I understand. Let's adjust the diagnosis."
+
+        if response is not None:
+            ai_reply = response.text or "I understand. Let's adjust the diagnosis."
         
         asst_msg = DiagnosticMessage(
             conversation_id=conv.id,

@@ -102,7 +102,7 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 142 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 146 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
 │       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician)

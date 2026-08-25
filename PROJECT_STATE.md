@@ -200,8 +200,9 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
     *   *Fix technician_id en Chat:* Corrección en `routers/tickets.py` para mapear el ID real del técnico (`Technician.user_id == current_user.id`) en lugar de `current_user.id` al registrar conversaciones de diagnóstico.
     *   *Refactor Async I/O & Salvaguarda:* Migración de llamadas de Gemini a la API asíncrona (`client.aio.models.generate_content`) y Resend a `run_in_threadpool`. Salvaguarda de latencia de event loop (<50ms) en `test_async_blocking.py`.
     *   *Estabilización de IA & Benchmark:* Diagnóstico y resolución de errores 503 por saturación global en `gemini-3.7-flash`, migrando formalmente a **`gemini-3.6-flash`** en toda la plataforma tras pruebas de latencia (~6.8s por respuesta con calidad técnica).
-    *   *Identidad del Asistente ("Ohm"):* Renombramiento integral del copiloto a **Ohm** (unidad eléctrica) en backend y componentes de UI (`AiChatBubble.jsx`, `AiChatDrawer.jsx`, `TechnicianDashboard.jsx`, `TechnicianWorkModal.jsx`).
-    *   *Verificación y Testing:* 142 tests en backend (Pytest) y 97 tests en frontend (Vitest) pasando al 100%.
+    *   *Identidad del Asistente ("Ohm") & Feedback Dinámico:* Renombramiento integral a **Ohm** y agregado de temporizador en `AiChatDrawer.jsx` (>3.5s) que muestra `"Ohm está experimentando alta demanda, reintentando conexión..."` durante reintentos backend.
+    *   *Fix RBAC SLA Config & Reintentos 503:* `GET /shops/sla-config` migrado a `subscription_guard` para habilitar lectura a técnicos de taller para el cálculo de badges SLA vencidos, y bucle de reintento con backoff (1s, 2s, 4s) ante 503 en `CorrectionService` y `ExplanationService`.
+    *   *Verificación y Testing:* 146 tests en backend (Pytest) y 97 tests en frontend (Vitest) pasando al 100%. Ciclos SDD archivados en `openspec/changes/archive/2026-08-25-gemini-503-retry-and-sla-rbac/` y `openspec/changes/archive/2026-08-23-technician-portal-ai-chat/`.
 
 ### 6.2 Estado del Workbench y Portal de Técnico
 *   **Módulo Workbench y Portal de Técnico Completo:** 100% implementado, respaldado por testing automatizado, blindaje multi-tenant, enrutamiento por roles y archivado formalmente bajo la metodología Spec-Driven Development (SDD).

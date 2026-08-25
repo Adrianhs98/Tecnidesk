@@ -1,8 +1,9 @@
+import asyncio
 import json
 from uuid import UUID
 from typing import List
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 from app.config import get_settings
 from app.models.diagnostic import DiagnosticCase
 from app.schemas.diagnostic import DiagnosticResponse, GroundedCitation
@@ -53,16 +54,57 @@ class ExplanationService:
         
         prompt = ExplanationService._build_prompt(symptom, retrieved_cases)
         
-        response = await client.aio.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
+        # Retry with exponential backoff for 503 ServerError
+        retries = 3
+        backoff_delays = [1.0, 2.0, 4.0]
+        response = None
+        for attempt in range(retries):
+            try:
+                response = await client.aio.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        response_mime_type="application/json",
+                        response_schema=DiagnosticResponse,
+                    )
+                )
+                break
+            except Exception as e:
+                is_503 = (
+                    (isinstance(e, errors.APIError) and e.code == 503)
+                    or getattr(e, "code", None) == 503
+                    or getattr(e, "status_code", None) == 503
+                    or "503" in str(e)
+                )
+                if is_503 and attempt < retries - 1:
+                    logger.warning(f"Gemini 503 Service Unavailable on attempt {attempt + 1}/{retries}. Retrying in {backoff_delays[attempt]}s...")
+                    await asyncio.sleep(backoff_delays[attempt])
+                    continue
+                elif is_503:
+                    logger.error(f"Gemini 503 Service Unavailable exhausted all {retries} retries: {e}")
+                    return DiagnosticResponse(
+                        had_sufficient_evidence=False,
+                        summary_explanation="Servicio de diagnóstico con IA no disponible temporalmente por alta demanda (503).",
+                        probable_cause="Unknown",
+                        recommended_steps=[],
+                        citations=[],
+                        similarity_distance=best_distance,
+                        maturity_source="none"
+                    )
+                else:
+                    raise e
 
-                response_mime_type="application/json",
-                response_schema=DiagnosticResponse,
+        if response is None:
+            return DiagnosticResponse(
+                had_sufficient_evidence=False,
+                summary_explanation="Servicio de diagnóstico con IA no disponible temporalmente por alta demanda (503).",
+                probable_cause="Unknown",
+                recommended_steps=[],
+                citations=[],
+                similarity_distance=best_distance,
+                maturity_source="none"
             )
-        )
         
         try:
             resp_dict = json.loads(response.text)
