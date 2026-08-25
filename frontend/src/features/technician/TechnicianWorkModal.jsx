@@ -266,7 +266,7 @@ export default function TechnicianWorkModal({
                 data-testid="open-ai-copilot-ticket-btn"
               >
                 <Sparkles size={16} />
-                <span>Copiloto IA</span>
+                <span>Ohm</span>
               </button>
             )}
             <button

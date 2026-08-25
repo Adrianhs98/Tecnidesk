@@ -265,8 +265,8 @@ export default function TechnicianDashboard() {
   const handleApplyAiAdvice = async (adviceText, ticket) => {
     try {
       const newNotes = ticket.diagnostic_notes
-        ? `${ticket.diagnostic_notes}\n\n[Copiloto IA]:\n${adviceText}`
-        : `[Copiloto IA]:\n${adviceText}`;
+        ? `${ticket.diagnostic_notes}\n\n[Ohm]:\n${adviceText}`
+        : `[Ohm]:\n${adviceText}`;
 
       const res = await authFetch(`${API_BASE}/tickets/${ticket.id}`, {
         method: "PATCH",

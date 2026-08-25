@@ -195,5 +195,14 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
     *   *Frontend & UX del Técnico:* Enrutamiento inteligente en `/login` (`td_role` a `/tech` o `/admin`), matriz de roles en `ProtectedRoute`, Dashboard del Técnico (`/tech`) con pestañas "Mis Asignaciones" y "Equipos Disponibles", modo supervisor de solo lectura para `admin` en `/tech` (sin mutaciones ni chat visible), tarjetas de alta densidad, modal de trabajo rápido (`TechnicianWorkModal.jsx`) con toggle `Eye`/`EyeOff` de PIN revelado, y Copiloto IA con burbuja flotante FAB (`AiChatBubble.jsx`) y panel lateral deslizable (`AiChatDrawer.jsx`) con integración bidireccional a la orden y confirmación de aprendizaje RAG (`pgvector`).
     *   *Verificación y Calidad:* 130 tests de backend en Pytest (100% pasando) y 97 tests de frontend en Vitest (100% pasando), build de producción exitoso.
 
+*   **Generación de Acceso a Técnicos, Async IO, Estabilización Gemini y Renombramiento a Ohm (25 de Agosto, 2026):**
+    *   *Generar Acceso a Técnicos:* Endpoint `POST /technicians/{id}/access` con generación de contraseñas temporales y despacho seguro vía Resend con manejo de errores 409 y 502. Integración en `TechniciansModal.jsx` con soporte para técnicos fantasma.
+    *   *Fix technician_id en Chat:* Corrección en `routers/tickets.py` para mapear el ID real del técnico (`Technician.user_id == current_user.id`) en lugar de `current_user.id` al registrar conversaciones de diagnóstico.
+    *   *Refactor Async I/O & Salvaguarda:* Migración de llamadas de Gemini a la API asíncrona (`client.aio.models.generate_content`) y Resend a `run_in_threadpool`. Salvaguarda de latencia de event loop (<50ms) en `test_async_blocking.py`.
+    *   *Estabilización de IA & Benchmark:* Diagnóstico y resolución de errores 503 por saturación global en `gemini-3.7-flash`, migrando formalmente a **`gemini-3.6-flash`** en toda la plataforma tras pruebas de latencia (~6.8s por respuesta con calidad técnica).
+    *   *Identidad del Asistente ("Ohm"):* Renombramiento integral del copiloto a **Ohm** (unidad eléctrica) en backend y componentes de UI (`AiChatBubble.jsx`, `AiChatDrawer.jsx`, `TechnicianDashboard.jsx`, `TechnicianWorkModal.jsx`).
+    *   *Verificación y Testing:* 142 tests en backend (Pytest) y 97 tests en frontend (Vitest) pasando al 100%.
+
 ### 6.2 Estado del Workbench y Portal de Técnico
 *   **Módulo Workbench y Portal de Técnico Completo:** 100% implementado, respaldado por testing automatizado, blindaje multi-tenant, enrutamiento por roles y archivado formalmente bajo la metodología Spec-Driven Development (SDD).
+

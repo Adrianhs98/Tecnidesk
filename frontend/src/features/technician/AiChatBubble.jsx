@@ -2,12 +2,12 @@ import { Sparkles, Bot } from "lucide-react";
 
 export default function AiChatBubble({ onClick, isOpen, activeTicketContext }) {
   return (
-    <aside className="ai-chat-bubble-container" aria-label="Copiloto IA Flotante">
+    <aside className="ai-chat-bubble-container" aria-label="Ohm Flotante">
       <button
         type="button"
         className={`ai-fab-btn ${isOpen ? "is-open" : ""}`}
         onClick={onClick}
-        aria-label={isOpen ? "Cerrar Copiloto IA" : "Abrir Copiloto IA"}
+        aria-label={isOpen ? "Cerrar Ohm" : "Abrir Ohm"}
         data-testid="ai-chat-bubble-btn"
       >
         <div className="ai-fab-glow" />
@@ -18,7 +18,7 @@ export default function AiChatBubble({ onClick, isOpen, activeTicketContext }) {
         <span className="ai-fab-tooltip">
           {activeTicketContext
             ? `Copiloto (${activeTicketContext.device_model || "Equipo"})`
-            : "Copiloto IA"}
+            : "Ohm"}
         </span>
       </button>
     </aside>

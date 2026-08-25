@@ -99,7 +99,7 @@ export default function AiChatDrawer({
       id: "welcome",
       role: "assistant",
       content:
-        "👋 ¡Hola! Soy tu **Copiloto IA de Taller** (Gemini 3.7 Flash). Puedo ayudarte a diagnosticar cortos, analizar esquemas, interpretar consumos de fuente y resolver fallas complejas.",
+        "👋 ¡Hola! Soy tu **Ohm\*\* (Gemini 3.6 Flash). Puedo ayudarte a diagnosticar cortos, analizar esquemas, interpretar consumos de fuente y resolver fallas complejas.",
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
@@ -168,12 +168,12 @@ export default function AiChatDrawer({
       const assistantMsg = {
         id: response.id || `ai-${Date.now()}`,
         role: "assistant",
-        content: response.content || response.text || "No se obtuvo respuesta del copiloto.",
+        content: response.content || response.text || "No se obtuvo respuesta de Ohm.",
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      setErrorMsg(err.message || "Error al comunicarse con el Copiloto IA");
+      setErrorMsg(err.message || "Error al comunicarse con el Ohm");
     } finally {
       setIsSending(false);
     }
@@ -238,7 +238,7 @@ export default function AiChatDrawer({
         className="ai-chat-drawer"
         role="dialog"
         aria-modal="true"
-        aria-label="Copiloto IA de Taller"
+        aria-label="Ohm"
         data-testid="ai-chat-drawer"
       >
         {/* Header */}
@@ -249,7 +249,7 @@ export default function AiChatDrawer({
               <Sparkles size={12} className="ai-sparkle-dot" />
             </div>
             <div>
-              <h3 className="ai-drawer-title">Copiloto IA Técnico</h3>
+              <h3 className="ai-drawer-title">Ohm</h3>
               <span className="ai-drawer-subtitle">Gemini 3.7 Flash • Diagnóstico & RAG</span>
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function AiChatDrawer({
             type="button"
             className="ai-drawer-close-btn"
             onClick={onClose}
-            aria-label="Cerrar Copiloto IA"
+            aria-label="Cerrar Ohm"
           >
             <X size={18} />
           </button>
@@ -321,7 +321,7 @@ export default function AiChatDrawer({
                   {isAssistant && (
                     <div className="ai-bubble-header">
                       <div className="ai-tag">
-                        <Cpu size={12} /> Copiloto
+                        <Cpu size={12} /> Ohm
                       </div>
                     </div>
                   )}
@@ -474,7 +474,7 @@ export default function AiChatDrawer({
               placeholder={
                 ticketContext
                   ? `Pregunta sobre ${ticketContext.device_brand} ${ticketContext.device_model}...`
-                  : "Pregunta al Copiloto técnico (Shift+Enter para salto de línea)..."
+                  : "Pregúntale a Ohm (Shift+Enter para salto de línea)..."
               }
               disabled={isSending}
               data-testid="ai-chat-input"
@@ -484,7 +484,7 @@ export default function AiChatDrawer({
               className="ai-send-btn"
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isSending}
-              aria-label="Enviar mensaje al copiloto"
+              aria-label="Enviar mensaje a Ohm"
               data-testid="ai-send-btn"
             >
               <Send size={16} />

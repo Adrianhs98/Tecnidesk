@@ -561,7 +561,7 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       });
     });
 
-    it("triggers onOpenAiCopilot when clicking Copiloto IA CTA", () => {
+    it("triggers onOpenAiCopilot when clicking Ohm CTA", () => {
       const copilotSpy = vi.fn();
       render(
         <QueryClientProvider client={queryClient}>
@@ -603,7 +603,7 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       expect(screen.queryByTestId("save-notes-btn")).not.toBeInTheDocument();
       expect(screen.getByTestId("diagnostic-notes-input")).toBeDisabled();
 
-      // Copiloto IA button hidden
+      // Ohm button hidden
       expect(screen.queryByTestId("open-ai-copilot-ticket-btn")).not.toBeInTheDocument();
     });
   });

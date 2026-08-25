@@ -689,10 +689,26 @@ async def diagnostic_chat(
         ticket = await ticket_service.get_ticket_by_id(
             db=db, ticket_id=ticket_id, shop_id=current_user.shop_id
         )
+        
+        from app.models.technician import Technician
+        from sqlalchemy import select
+        
+        tech = await db.scalar(
+            select(Technician).where(
+                Technician.user_id == current_user.id,
+                Technician.shop_id == current_user.shop_id
+            )
+        )
+        if not tech:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo los técnicos registrados en este taller pueden usar el chat de diagnóstico."
+            )
+            
         return await CorrectionService.handle_chat_message(
             db=db,
             shop_id=current_user.shop_id,
-            technician_id=current_user.id,
+            technician_id=tech.id,
             ticket_id=ticket_id,
             message_in=payload
         )
@@ -716,13 +732,30 @@ async def diagnostic_chat_confirm(
     _ticket = Depends(verify_ticket_technician_access),
 ):
     try:
+        # Check ticket exists
         ticket = await ticket_service.get_ticket_by_id(
             db=db, ticket_id=ticket_id, shop_id=current_user.shop_id
         )
+        
+        from app.models.technician import Technician
+        from sqlalchemy import select
+        
+        tech = await db.scalar(
+            select(Technician).where(
+                Technician.user_id == current_user.id,
+                Technician.shop_id == current_user.shop_id
+            )
+        )
+        if not tech:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo los técnicos registrados en este taller pueden confirmar diagnósticos."
+            )
+            
         return await CorrectionService.confirm_correction(
             db=db,
             shop_id=current_user.shop_id,
-            technician_id=current_user.id,
+            technician_id=tech.id,
             ticket_id=ticket_id,
             confirm_in=payload
         )

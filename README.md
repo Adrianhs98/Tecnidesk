@@ -19,14 +19,15 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 
 ### 👨‍🔧 Portal de Técnico & Mesa de Trabajo Dedicada (`/tech`)
 - **Experiencia Operativa para el Técnico:** Enrutamiento inteligente por rol (`/tech` vs `/admin`), pestañas dedicadas de "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic (`POST /tickets/{id}/assign-me`).
+- **Generación de Acceso a Técnicos:** Provisión de cuentas de acceso con credenciales temporales despachadas automáticamente vía Resend (`POST /technicians/{id}/access`) y gestión en `TechniciansModal`.
 - **Modo Supervisor de Solo Lectura:** Acceso de inspección para administradores en `/tech` que preserva la trazabilidad de auditoría deshabilitando mutaciones operativas.
 - **Ficha de Reparación Ágil (`TechnicianWorkModal`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos y evidencias fotográficas.
-- **Copiloto IA de Taller (`AiChatBubble` & `AiChatDrawer`):** Burbuja flotante permanente y drawer lateral conversacional potenciado por Gemini 3.7 Flash con modo libre de taller (`POST /diagnostic/chat`) y modo contextualizado al ticket (`POST /tickets/{id}/diagnostic-chat`), botón para volcar diagnósticos y confirmación de aprendizaje RAG.
+- **Ohm (`AiChatBubble` & `AiChatDrawer`):** Burbuja flotante permanente y drawer lateral conversacional potenciado por Gemini 3.6 Flash con modo libre de taller (`POST /diagnostic/chat`) y modo contextualizado al ticket (`POST /tickets/{id}/diagnostic-chat`), botón para volcar diagnósticos y confirmación de aprendizaje RAG.
 
 ### 🧠 Diagnóstico Asistido con IA (RAG Híbrido & Human-in-the-Loop)
 - **Búsqueda Vectorial HNSW:** Recuperación semántica sobre base de conocimiento y casos históricos con `pgvector` (índices HNSW de 768 dimensiones) y aislamiento multi-tenant.
 - **Embeddings Locales:** Generación de vectores de texto mediante Ollama (`nomic-embed-text-v2-moe`) con fallback resiliente.
-- **Razonamiento Grounded con Gemini 3.7 Flash:** Generación de explicaciones técnicas estructuradas y citaciones verificadas contra alucinaciones.
+- **Razonamiento Grounded con Gemini 3.6 Flash:** Generación de explicaciones técnicas estructuradas y citaciones verificadas contra alucinaciones.
 - **Human-in-the-Loop:** Panel interactivo `DiagnosticAssistPanel` que permite al técnico validar o corregir sugerencias de la IA, retroalimentando la base con casos reales validados (`real_validated`).
 
 ### 📦 Inventario y Repuestos
@@ -66,7 +67,7 @@ Tecnidesk/
 - **Lenguaje y Framework:** Python 3.12+, FastAPI
 - **Base de Datos & ORM:** PostgreSQL con extensión `pgvector` (HNSW), SQLAlchemy 2.0 (asyncio) y `asyncpg`
 - **Control de Migraciones:** Alembic
-- **Inteligencia Artificial & RAG:** Google Gemini 3.7 Flash, Ollama (`nomic-embed-text-v2-moe`), `pgvector`
+- **Inteligencia Artificial & RAG:** Google Gemini 3.6 Flash, Ollama (`nomic-embed-text-v2-moe`), `pgvector`
 - **Validación y Configuración:** Pydantic v2, Pydantic Settings
 - **Seguridad y Criptografía:** Fernet (`cryptography`), Bcrypt, JWT (`python-jose`)
 - **Rate Limiting:** SlowAPI (doble blindaje por user_id)
@@ -101,7 +102,7 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 130 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 142 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
 │       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician)
@@ -109,7 +110,7 @@ tecnidesk/
 │       ├── context/          # ThemeContext (Modo Claro/Oscuro OKLCH)
 │       ├── features/
 │       │   ├── admin/        # Módulo administrativo Workbench y analítica
-│       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto IA
+│       │   ├── technician/   # Portal de técnico, mesa de trabajo y asistente Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
 │       ├── pages/            # Login, Registro y Páginas públicas
 │       ├── tests/            # 97 tests con Vitest y Testing Library
@@ -128,7 +129,7 @@ tecnidesk/
 - **Node.js:** 18 o superior
 - **PostgreSQL:** 14 o superior con extensión `pgvector` instalada
 - **Ollama:** Instancia local o remota con modelo `nomic-embed-text-v2-moe` descargado
-- **Google Gemini API:** Clave de API con acceso al modelo Gemini 3.7 Flash
+- **Google Gemini API:** Clave de API con acceso al modelo Gemini 3.6 Flash
 - **Cloudflare R2:** Cuenta y credenciales para almacenamiento de evidencias fotográficas
 - **Resend:** API Key para envío de correos transaccionales
 

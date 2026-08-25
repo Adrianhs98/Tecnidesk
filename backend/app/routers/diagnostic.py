@@ -92,7 +92,7 @@ async def preview_diagnosis(
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# POST /diagnostic/chat — Copiloto IA Técnico Libre
+# POST /diagnostic/chat — Ohm — Asistente IA Técnico Libre
 # ═════════════════════════════════════════════════════════════════════════════
 import uuid
 from google import genai
@@ -106,8 +106,8 @@ from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageRespons
 @router.post(
     "/chat",
     response_model=DiagnosticMessageResponse,
-    summary="Chat técnico libre / Copiloto de taller",
-    description="Consulta técnica libre con el copiloto IA (Gemini 3.7 Flash) para asistencia en diagnósticos y reparaciones.",
+    summary="Chat técnico libre / Ohm (Asistente de taller)",
+    description="Consulta técnica libre con el Ohm (Gemini 3.6 Flash) para asistencia en diagnósticos y reparaciones.",
 )
 @limiter.limit("10/minute", key_func=get_user_rate_limit_key)
 async def workshop_diagnostic_chat(
@@ -117,7 +117,7 @@ async def workshop_diagnostic_chat(
 ):
     settings = get_settings()
     prompt = (
-        "Eres un copiloto técnico experto en microelectrónica, reparación de hardware, telefonía móvil, "
+        "Eres un asistente Ohm, experto en microelectrónica, reparación de hardware, telefonía móvil, "
         "computadoras y electrodomésticos para talleres profesionales.\n"
         "Proporciona respuestas concisas, altamente técnicas, prácticas y ordenadas paso a paso para asistir al técnico.\n\n"
         f"Consulta del técnico:\n{payload.message}"
@@ -126,13 +126,13 @@ async def workshop_diagnostic_chat(
     try:
         client = genai.Client(api_key=settings.gemini_api_key)
         response = client.models.generate_content(
-            model="gemini-3.7-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.2),
         )
-        ai_reply = response.text or "No se pudo generar una respuesta del copiloto en este momento."
+        ai_reply = response.text or "No se pudo generar una respuesta de Ohm en este momento."
     except Exception as exc:
-        ai_reply = f"Servicio de Copiloto IA no disponible temporalmente: {str(exc)}"
+        ai_reply = f"Servicio de Ohm no disponible temporalmente: {str(exc)}"
 
     return DiagnosticMessageResponse(
         id=uuid.uuid4(),
