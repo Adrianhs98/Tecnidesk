@@ -202,8 +202,14 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
     *   *Estabilización de IA & Benchmark:* Diagnóstico y resolución de errores 503 por saturación global en `gemini-3.7-flash`, migrando formalmente a **`gemini-3.6-flash`** en toda la plataforma tras pruebas de latencia (~6.8s por respuesta con calidad técnica).
     *   *Identidad del Asistente ("Ohm") & Feedback Dinámico:* Renombramiento integral a **Ohm** y agregado de temporizador en `AiChatDrawer.jsx` (>3.5s) que muestra `"Ohm está experimentando alta demanda, reintentando conexión..."` durante reintentos backend.
     *   *Fix RBAC SLA Config & Reintentos 503:* `GET /shops/sla-config` migrado a `subscription_guard` para habilitar lectura a técnicos de taller para el cálculo de badges SLA vencidos, y bucle de reintento con backoff (1s, 2s, 4s) ante 503 en `CorrectionService` y `ExplanationService`.
-    *   *Verificación y Testing:* 146 tests en backend (Pytest) y 97 tests en frontend (Vitest) pasando al 100%. Ciclos SDD archivados en `openspec/changes/archive/2026-08-25-gemini-503-retry-and-sla-rbac/` y `openspec/changes/archive/2026-08-23-technician-portal-ai-chat/`.
+*   **Router de Modelos Ohm, Localización del Prompt y Blindaje de Tests (27 de Agosto, 2026):**
+    *   *Router de Modelos:* Corrección del identificador de modelo rápido en `app/config.py` a `"gemini-3.5-flash-lite"`.
+    *   *Localización del Prompt:* Especialización y traducción al español del system prompt de diagnóstico en `app/routers/diagnostic.py` (`workshop_diagnostic_chat`).
+    *   *Dependencias:* Incorporación de `respx==0.23.1` y fijación determinística de `google-genai==1.2.0` en `requirements.txt`.
+    *   *Fixtures y Mocks:* Inyección de `created_at=now` en el fixture de `Shop` de `test_dashboard_ticket_filters.py`, actualización de assert en `test_model_router.py`, y refactor de `FakeServerError503` en `test_gemini_503_retry.py` utilizando `requests.Response` real con `encoding="utf-8"`.
+    *   *Verificación y Calidad:* **152 tests de backend** en Pytest (100% pasando) y **99 tests de frontend** en Vitest (100% pasando). Ciclo SDD archivado en `openspec/changes/archive/2026-08-27-ohm-router-and-test-suite-stabilization/`.
 
 ### 6.2 Estado del Workbench y Portal de Técnico
 *   **Módulo Workbench y Portal de Técnico Completo:** 100% implementado, respaldado por testing automatizado, blindaje multi-tenant, enrutamiento por roles y archivado formalmente bajo la metodología Spec-Driven Development (SDD).
+
 

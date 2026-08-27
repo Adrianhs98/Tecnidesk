@@ -76,5 +76,6 @@ python-magic-bin==0.4.14; sys_platform == 'win32'
 pytest
 pytest-asyncio
 pytest-cov
-google-genai>=0.1.0
+google-genai==1.2.0
 pgvector>=0.3.0
+respx==0.23.1

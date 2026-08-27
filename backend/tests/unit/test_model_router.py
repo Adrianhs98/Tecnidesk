@@ -4,7 +4,7 @@ from app.services.model_router import ModelRouter
 def test_routes_simple_and_dashboard_questions_to_fast_model():
     route = ModelRouter.select("¿Qué ticket llegó hoy?", ticket_context=False)
     assert route.route == "fast"
-    assert route.model == "gemini-3.5-flash"
+    assert route.model == "gemini-3.5-flash-lite"
 
 
 def test_routes_complex_ticket_question_to_reasoning_model():

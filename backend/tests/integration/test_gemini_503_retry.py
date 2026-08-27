@@ -3,6 +3,8 @@ Pruebas de reintento automático y resiliencia ante errores 503 (Service Unavail
 de Google Gemini en CorrectionService y ExplanationService.
 """
 import uuid
+import json
+import requests
 from datetime import datetime, timezone
 import pytest
 from google.genai import errors
@@ -62,7 +64,11 @@ async def _seed_shop_and_ticket(db_session) -> tuple:
 
 class FakeServerError503(errors.APIError):
     def __init__(self):
-        super().__init__(503, {"error": {"code": 503, "message": "High demand"}})
+        resp = requests.Response()
+        resp.status_code = 503
+        resp._content = json.dumps({"error": {"code": 503, "message": "High demand"}}).encode("utf-8")
+        resp.encoding = "utf-8"
+        super().__init__(503, resp)
         self.code = 503
 
 

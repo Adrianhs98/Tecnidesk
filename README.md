@@ -102,7 +102,7 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 146 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 152 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
 │       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician)
@@ -113,7 +113,7 @@ tecnidesk/
 │       │   ├── technician/   # Portal de técnico, mesa de trabajo y asistente Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
 │       ├── pages/            # Login, Registro y Páginas públicas
-│       ├── tests/            # 97 tests con Vitest y Testing Library
+│       ├── tests/            # 99 tests con Vitest y Testing Library
 │       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
 │       ├── App.css           # Estilos Workbench y temas OKLCH
 │       └── App.jsx           # Rutas y enrutador principal
@@ -229,7 +229,7 @@ La suite de backend valida modelos, servicios, guards de seguridad, cálculo de 
 cd backend
 source .venv/bin/activate
 
-# Ejecutar todos los tests (121+ tests pasando al 100%)
+# Ejecutar todos los tests (152 tests pasando al 100%)
 pytest
 
 # Ejecutar suite con reporte de cobertura
@@ -246,7 +246,7 @@ La suite de frontend prueba componentes visuales, interactividad del Workbench K
 ```bash
 cd frontend
 
-# Ejecutar todos los tests (74+ tests pasando al 100%)
+# Ejecutar todos los tests (99 tests pasando al 100%)
 npm test
 
 # Ejecutar con reporte de cobertura

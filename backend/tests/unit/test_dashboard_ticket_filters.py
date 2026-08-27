@@ -21,6 +21,7 @@ async def test_pending_yesterday_combines_status_and_date_filters(db_session):
         subdomain=f"dashboard-{uuid.uuid4().hex[:8]}",
         contact_email="dashboard@example.com",
         contact_whatsapp="123456789",
+        created_at=now,
     )
     db_session.add(shop)
     await db_session.flush()

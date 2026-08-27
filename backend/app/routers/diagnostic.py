@@ -149,8 +149,10 @@ async def workshop_diagnostic_chat(
         return DiagnosticMessageResponse(id=uuid.uuid4(), role="assistant", content=answer, created_at=datetime.now(timezone.utc), model_route="database", model="database")
     route = ModelRouter.select(payload.message, ticket_context=False)
     prompt = (
-        "You are Ohm, a workshop assistant. Answer briefly with practical repair steps.\n"
-        f"Question: {payload.message}"
+        "Eres Ohm, un asistente de taller especializado en microelectrónica, reparación de "
+        "hardware, telefonía, computadoras y electrodomésticos. Responde paso a paso, de "
+        "forma concisa y con acciones prácticas.\n"
+        f"Consulta: {payload.message}"
     )
 
     try:
