@@ -22,6 +22,12 @@ export const sendDiagnosticChat = async (ticketId, message) => {
   return response.json();
 };
 
+export const getDiagnosticChatHistory = async (ticketId) => {
+  const response = await authFetch(`${API_BASE}/tickets/${ticketId}/diagnostic-chat`);
+  if (!response.ok) throw new Error("Error loading diagnostic chat history");
+  return response.json();
+};
+
 export const confirmCorrection = async (ticketId, data) => {
   const response = await authFetch(`${API_BASE}/tickets/${ticketId}/diagnostic-chat/confirm`, {
     method: 'POST',

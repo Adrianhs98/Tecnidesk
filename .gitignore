@@ -51,8 +51,18 @@ AUDITORIA_*.md
 *_PRIVATE.md
 *_INTERNAL.md
 
-# scripts auxiliares privados en la raíz
+# scripts auxiliares privados y pruebas en la raíz
+*.py
+!backend/**
+!frontend/**
+test_*.py
+!backend/tests/**/test_*.py
+scratch_*.py
+rename_copilot.py
+respuesta.txt
+mem_save_payload.json
 inyectar_datos.py
+injectar_datos.py
 setup_inventario_metabase.py
 formulario_visitas.py
 registro_visitas.py

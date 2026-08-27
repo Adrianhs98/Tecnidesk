@@ -18,6 +18,7 @@ import {
 import {
   sendDiagnosticChat,
   sendFreeDiagnosticChat,
+  getDiagnosticChatHistory,
   confirmCorrection,
 } from "../../api/diagnostic";
 
@@ -131,6 +132,36 @@ export default function AiChatDrawer({
   const [appliedSuccess, setAppliedSuccess] = useState(null);
 
   const messagesEndRef = useRef(null);
+  // A request can outlive the ticket selected when it was sent. Keep the
+  // currently rendered context separate from the handler closure so a late
+  // response cannot be appended to another ticket's transcript.
+  const activeTicketIdRef = useRef(ticketContext?.id ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    activeTicketIdRef.current = ticketContext?.id ?? null;
+    const welcomeMessage = {
+      id: "welcome",
+      role: "assistant",
+      content: "👋 Hola, soy Ohm. Te ayudo con pasos breves y prácticos para la reparación.",
+    };
+    setErrorMsg(null);
+    setShowRagForm(false);
+    if (!ticketContext?.id) {
+      setMessages([welcomeMessage]);
+      return () => { cancelled = true; };
+    }
+    // Reset before fetching so the previous ticket's transcript can never flash.
+    setMessages([welcomeMessage]);
+    getDiagnosticChatHistory(ticketContext.id)
+      .then((history) => {
+        if (!cancelled) setMessages(history.messages?.length ? history.messages : [welcomeMessage]);
+      })
+      .catch((error) => {
+        if (!cancelled) setErrorMsg(error.message || "No se pudo cargar el historial del ticket.");
+      });
+    return () => { cancelled = true; };
+  }, [ticketContext?.id]);
 
   // Auto-scroll to bottom of chat
   const scrollToBottom = () => {
@@ -145,25 +176,12 @@ export default function AiChatDrawer({
     }
   }, [messages, isOpen]);
 
-  // When ticketContext changes, announce it in chat
-  useEffect(() => {
-    if (ticketContext) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `context-${ticketContext.id}-${Date.now()}`,
-          role: "system",
-          content: `🎯 **Contexto Activado:** Trabajando en **${ticketContext.device_brand} ${ticketContext.device_model}** (#${ticketContext.tracking_token || ticketContext.id?.slice(0, 8)}). Falla: "${ticketContext.issue_description || "Sin falla especificada"}"`,
-        },
-      ]);
-    }
-  }, [ticketContext]);
-
   const handleSendMessage = async (customText = null) => {
     const textToSend = typeof customText === "string" ? customText : inputMessage;
     if (!textToSend.trim() || isSending) return;
 
     const userText = textToSend.trim();
+    const requestTicketId = ticketContext?.id ?? null;
     setInputMessage("");
     setErrorMsg(null);
 
@@ -185,7 +203,9 @@ export default function AiChatDrawer({
         content: response.content || response.text || "No se obtuvo respuesta de Ohm.",
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
+      if (activeTicketIdRef.current === requestTicketId) {
+        setMessages((prev) => [...prev, assistantMsg]);
+      }
     } catch (err) {
       setErrorMsg(err.message || "Error al comunicarse con el Ohm");
     } finally {

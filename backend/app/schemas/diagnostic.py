@@ -35,6 +35,11 @@ class DiagnosticMessageResponse(BaseModel):
     role: str
     content: str
     created_at: datetime
+    model_route: Optional[str] = None
+    model: Optional[str] = None
+
+class DiagnosticConversationHistoryResponse(BaseModel):
+    messages: List[DiagnosticMessageResponse]
 
 class ConfirmCorrectionIn(BaseModel):
     diagnosed_cause: str

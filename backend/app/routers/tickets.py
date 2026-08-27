@@ -666,7 +666,7 @@ async def diagnose_ticket(
 # ═════════════════════════════════════════════════════════════════════════════
 # 12. POST /tickets/{ticket_id}/diagnostic-chat
 # ═════════════════════════════════════════════════════════════════════════════
-from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
+from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, DiagnosticConversationHistoryResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
 from app.services.correction_service import CorrectionService
 
 @router.post(
@@ -714,6 +714,23 @@ async def diagnostic_chat(
         )
     except TicketNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.get("/{ticket_id}/diagnostic-chat", response_model=DiagnosticConversationHistoryResponse)
+async def diagnostic_chat_history(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
+):
+    from app.models.technician import Technician
+    tech = await db.scalar(select(Technician).where(
+        Technician.user_id == current_user.id, Technician.shop_id == current_user.shop_id
+    ))
+    if not tech:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only registered technicians can view diagnostic chat history.")
+    messages = await CorrectionService.get_conversation_history(db, current_user.shop_id, tech.id, ticket_id)
+    return DiagnosticConversationHistoryResponse(messages=messages)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 13. POST /tickets/{ticket_id}/diagnostic-chat/confirm

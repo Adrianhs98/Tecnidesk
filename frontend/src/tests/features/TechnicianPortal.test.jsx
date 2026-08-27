@@ -672,6 +672,53 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       fireEvent.click(applyBtn);
       expect(onApplySpy).toHaveBeenCalledWith("Respuesta estructurada del copiloto IA", mockTicket);
     });
+
+    it("AiChatDrawer clears the previous ticket transcript before loading another ticket", async () => {
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url) => {
+        if (url.includes("/tickets/t-ctx-1/diagnostic-chat")) {
+          return { ok: true, json: async () => ({ messages: [{ id: "old", role: "assistant", content: "Historial Apple" }] }) };
+        }
+        if (url.includes("/tickets/t-ctx-2/diagnostic-chat")) {
+          return { ok: true, json: async () => ({ messages: [{ id: "new", role: "assistant", content: "Historial Samsung" }] }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const firstTicket = { id: "t-ctx-1", device_brand: "Apple", device_model: "iPhone 11" };
+      const secondTicket = { id: "t-ctx-2", device_brand: "Samsung", device_model: "S22" };
+      const { rerender } = render(<AiChatDrawer isOpen={true} onClose={vi.fn()} ticketContext={firstTicket} />);
+      await screen.findByText("Historial Apple");
+      rerender(<AiChatDrawer isOpen={true} onClose={vi.fn()} ticketContext={secondTicket} />);
+      expect(screen.queryByText("Historial Apple")).not.toBeInTheDocument();
+      expect(await screen.findByText("Historial Samsung")).toBeInTheDocument();
+    });
+
+    it("does not append a late reply from the previous ticket after switching context", async () => {
+      let resolvePreviousReply;
+      vi.mocked(authFetchModule.authFetch).mockImplementation((url, options) => {
+        if (url.includes("/tickets/t-ctx-1/diagnostic-chat") && options?.method === "POST") {
+          return new Promise((resolve) => { resolvePreviousReply = resolve; });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ messages: [] }) });
+      });
+      const firstTicket = { id: "t-ctx-1", device_brand: "Apple", device_model: "iPhone 11" };
+      const secondTicket = { id: "t-ctx-2", device_brand: "Samsung", device_model: "S22" };
+      const { rerender } = render(<AiChatDrawer isOpen={true} onClose={vi.fn()} ticketContext={firstTicket} />);
+
+      fireEvent.change(screen.getByTestId("ai-chat-input"), { target: { value: "Consulta Apple" } });
+      fireEvent.click(screen.getByTestId("ai-send-btn"));
+      await waitFor(() => expect(resolvePreviousReply).toBeTypeOf("function"));
+
+      rerender(<AiChatDrawer isOpen={true} onClose={vi.fn()} ticketContext={secondTicket} />);
+      resolvePreviousReply({
+        ok: true,
+        json: async () => ({ id: "late-reply", role: "assistant", content: "Respuesta del ticket Apple" }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ai-active-ticket-banner")).toHaveTextContent("Samsung S22");
+        expect(screen.queryByText("Respuesta del ticket Apple")).not.toBeInTheDocument();
+      });
+    });
   });
 
   // ─── 7. Full TechnicianDashboard Integration ──────────────────────────────

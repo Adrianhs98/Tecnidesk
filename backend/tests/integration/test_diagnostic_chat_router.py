@@ -104,6 +104,12 @@ async def test_diagnostic_chat_saves_correct_technician_id(client: AsyncClient, 
             headers={"Authorization": f"Bearer {token}"}
         )
         assert response.status_code == 200, f"Error en endpoint: {response.text}"
+        history_response = await client.get(
+            f"/tickets/{ticket.id}/diagnostic-chat",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert history_response.status_code == 200
+        assert [message["role"] for message in history_response.json()["messages"]] == ["technician", "assistant"]
     finally:
         app.dependency_overrides.pop(subscription_guard, None)
     

@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 import logging
 from google import genai
 from google.genai import types, errors
@@ -13,6 +14,7 @@ from app.models.diagnostic import DiagnosticConversation, DiagnosticMessage, Dia
 from app.models.ticket import Ticket
 from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
 from app.services.embedding_service import EmbeddingService
+from app.services.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,7 @@ class CorrectionService:
         stmt = select(DiagnosticConversation).where(
             DiagnosticConversation.ticket_id == ticket_id,
             DiagnosticConversation.shop_id == shop_id,
+            DiagnosticConversation.technician_id == technician_id,
             DiagnosticConversation.status == "open"
         )
         result = await db.execute(stmt)
@@ -44,8 +47,16 @@ class CorrectionService:
                 status="open"
             )
             db.add(conv)
-            await db.commit()
-            await db.refresh(conv)
+            try:
+                await db.commit()
+                await db.refresh(conv)
+            except IntegrityError:
+                # The partial unique index is the authority when two requests
+                # attempt to open the same ticket chat at the same time.
+                await db.rollback()
+                conv = await db.scalar(stmt)
+                if conv is None:
+                    raise
             
         return conv
 
@@ -70,11 +81,14 @@ class CorrectionService:
         ticket_res = await db.execute(ticket_stmt)
         ticket = ticket_res.scalar_one_or_none()
         
-        prompt = f"You are a master technician assistant helping a technician refine a diagnosis.\n"
-        prompt += f"Device: {ticket.device_brand} {ticket.device_model}\nSymptom: {ticket.issue_description}\n\n"
-        prompt += "Chat History:\n"
-        for msg in messages:
-            prompt += f"{msg.role}: {msg.content}\n"
+        route = ModelRouter.select(message_in.message, ticket_context=True, prior_messages=messages[:-1])
+        history = "\n".join(f"{msg.role}: {msg.content[:800]}" for msg in messages[-8:])
+        prompt = (
+            "You are Ohm, a repair technician assistant. Give concise, actionable steps. "
+            "Do not repeat the ticket context.\n"
+            f"Device: {ticket.device_brand} {ticket.device_model}. Symptom: {ticket.issue_description}.\n"
+            f"Recent chat:\n{history}"
+        )
             
         settings = get_settings()
         client = genai.Client(api_key=settings.gemini_api_key)
@@ -86,9 +100,9 @@ class CorrectionService:
         for attempt in range(retries):
             try:
                 response = await client.aio.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model=route.model,
                     contents=prompt,
-                    config=types.GenerateContentConfig(temperature=0.0)
+                    config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=route.max_output_tokens)
                 )
                 break
             except Exception as e:
@@ -130,14 +144,34 @@ class CorrectionService:
             id=asst_msg.id,
             role=asst_msg.role,
             content=asst_msg.content,
-            created_at=asst_msg.created_at
+            created_at=asst_msg.created_at,
+            model_route=route.route,
+            model=route.model,
         )
+
+    @staticmethod
+    async def get_conversation_history(db: AsyncSession, shop_id: uuid.UUID, technician_id: uuid.UUID, ticket_id: uuid.UUID) -> list[DiagnosticMessageResponse]:
+        """Return only the caller's open ticket thread; never cross technician boundaries."""
+        conversation = await db.scalar(select(DiagnosticConversation).where(
+            DiagnosticConversation.ticket_id == ticket_id,
+            DiagnosticConversation.shop_id == shop_id,
+            DiagnosticConversation.technician_id == technician_id,
+            DiagnosticConversation.status == "open",
+        ))
+        if not conversation:
+            return []
+        result = await db.execute(select(DiagnosticMessage).where(
+            DiagnosticMessage.conversation_id == conversation.id
+        ).order_by(DiagnosticMessage.created_at.asc()))
+        return [DiagnosticMessageResponse(id=item.id, role=item.role, content=item.content, created_at=item.created_at)
+                for item in result.scalars().all()]
 
     @staticmethod
     async def confirm_correction(db: AsyncSession, shop_id: uuid.UUID, technician_id: uuid.UUID, ticket_id: uuid.UUID, confirm_in: ConfirmCorrectionIn) -> DiagnosticCaseResponse:
         stmt = select(DiagnosticConversation).where(
             DiagnosticConversation.ticket_id == ticket_id,
             DiagnosticConversation.shop_id == shop_id,
+            DiagnosticConversation.technician_id == technician_id,
             DiagnosticConversation.status == "open"
         )
         result = await db.execute(stmt)

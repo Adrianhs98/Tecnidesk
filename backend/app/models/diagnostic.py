@@ -148,6 +148,15 @@ class DiagnosticConversation(UUIDMixin, Base):
     )
 
     __table_args__ = (
+        Index(
+            "uq_diagnostic_conversations_open_context",
+            "shop_id",
+            "technician_id",
+            "ticket_id",
+            unique=True,
+            postgresql_where=sa.text("status = 'open'"),
+            sqlite_where=sa.text("status = 'open'"),
+        ),
         CheckConstraint(
             "status IN ('open', 'confirmed', 'corrected', 'abandoned')",
             name="ck_diagnostic_conversations_status",
