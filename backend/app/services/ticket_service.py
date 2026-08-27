@@ -1442,3 +1442,27 @@ async def get_workshop_cycle_time_metrics(
         time_window_days=days,
     )
 
+
+async def update_ticket_partial(
+    db: AsyncSession,
+    ticket_id: uuid.UUID,
+    shop_id: uuid.UUID,
+    data: dict,
+) -> Ticket:
+    """Actualiza parcialmente un ticket sin disparar hooks complejos de status."""
+    ticket = await _get_ticket_or_404(db, ticket_id, shop_id)
+    
+    for field, value in data.items():
+        if hasattr(ticket, field):
+            setattr(ticket, field, value)
+            
+    try:
+        await db.commit()
+        await db.refresh(ticket)
+    except Exception:
+        await db.rollback()
+        raise
+        
+    ticket.device_password = decrypt_pin(ticket.pin_or_password)  # type: ignore[attr-defined]
+    return _clear_pin(ticket)
+

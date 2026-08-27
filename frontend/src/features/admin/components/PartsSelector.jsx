@@ -28,7 +28,8 @@ export default function PartsSelector({ ticketId, items, setItems, status, onIte
       try {
         const res = await authFetch(`${API_BASE}/inventory`);
         if (res.ok && mounted) {
-          setInventory(await res.json());
+          const data = await res.json();
+          setInventory(data.items || data);
         }
       } catch (err) {
         console.error("Error fetching inventory:", err);

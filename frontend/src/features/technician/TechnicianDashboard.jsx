@@ -534,7 +534,11 @@ export default function TechnicianDashboard() {
       {selectedTicketForWork && (
         <TechnicianWorkModal
           ticket={selectedTicketForWork}
-          onClose={() => setSelectedTicketForWork(null)}
+          onClose={() => {
+            setSelectedTicketForWork(null);
+            setSelectedTicketForAi(null);
+            setIsAiDrawerOpen(false);
+          }}
           onStatusChange={(updated) => {
             handleTicketUpdated(updated);
             setSelectedTicketForWork(updated);

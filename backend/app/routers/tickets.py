@@ -780,3 +780,32 @@ async def diagnostic_chat_confirm(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 14. PATCH /tickets/{ticket_id}
+# ═════════════════════════════════════════════════════════════════════════════
+@router.patch(
+    "/{ticket_id}",
+    response_model=TicketResponse,
+    summary="Actualización general del ticket",
+    description="Actualiza campos del ticket sin disparar cambios de estado automáticos.",
+)
+async def update_ticket(
+    ticket_id: uuid.UUID,
+    payload: TicketUpdate,
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+    _ticket = Depends(verify_ticket_technician_access),
+):
+    try:
+        from app.services.ticket_service import update_ticket_partial
+        update_data = payload.model_dump(exclude_unset=True)
+        return await update_ticket_partial(
+            db=db,
+            ticket_id=ticket_id,
+            shop_id=current_user.shop_id,
+            data=update_data,
+        )
+    except TicketNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e

@@ -208,6 +208,10 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
     *   *Dependencias:* Incorporación de `respx==0.23.1` y fijación determinística de `google-genai==1.2.0` en `requirements.txt`.
     *   *Fixtures y Mocks:* Inyección de `created_at=now` en el fixture de `Shop` de `test_dashboard_ticket_filters.py`, actualización de assert en `test_model_router.py`, y refactor de `FakeServerError503` en `test_gemini_503_retry.py` utilizando `requests.Response` real con `encoding="utf-8"`.
     *   *Verificación y Calidad:* **152 tests de backend** en Pytest (100% pasando) y **99 tests de frontend** en Vitest (100% pasando). Ciclo SDD archivado en `openspec/changes/archive/2026-08-27-ohm-router-and-test-suite-stabilization/`.
+*   **Estabilización del Copiloto Ohm, Selector de Repuestos y Endpoint PATCH de Notas (27 de Agosto, 2026 - Tarde):**
+    *   *Aislamiento de Contexto en Chat IA:* En `TechnicianDashboard.jsx`, se corrigió la limpieza de estado al cerrar `TechnicianWorkModal` reseteando `selectedTicketForAi(null)` y cerrando el drawer (`setIsAiDrawerOpen(false)`), evitando fuga de historial hacia otros tickets mientras el backend preserva el chat al reabrir el mismo equipo.
+    *   *Soporte de Paginación en Repuestos:* En `PartsSelector.jsx`, se adaptó el consumo de `/inventory` extrayendo `data.items || data`, resolviendo el catálogo vacío en el selector de piezas del técnico.
+    *   *Actualización Parcial de Tickets (Fix 405 Method Not Allowed):* Se implementó `update_ticket_partial` en `ticket_service.py` y se expuso `PATCH /tickets/{ticket_id}` en `routers/tickets.py` con el esquema `TicketUpdate`, permitiendo guardar notas técnicas y diagnósticas sin disparar mutaciones de estado automáticas a `ESPERANDO_APROBACION`.
 
 ### 6.2 Estado del Workbench y Portal de Técnico
 *   **Módulo Workbench y Portal de Técnico Completo:** 100% implementado, respaldado por testing automatizado, blindaje multi-tenant, enrutamiento por roles y archivado formalmente bajo la metodología Spec-Driven Development (SDD).
