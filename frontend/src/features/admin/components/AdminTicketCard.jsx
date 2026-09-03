@@ -373,7 +373,12 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
         </div>
         <div
           className="ticket-badge"
-          style={{ background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44`, flexShrink: 0 }}
+          style={{
+            backgroundColor: cfg.bg || `${cfg.color}18`,
+            color: cfg.color,
+            borderColor: cfg.border || `${cfg.color}40`,
+            flexShrink: 0,
+          }}
         >
           {cfg.icon === "📋" ? <ClipboardList size={14} style={{ marginRight: 6 }} /> : <span style={{ marginRight: 6, fontSize: 10, fontFamily: "monospace" }}>{cfg.icon}</span>}
           {cfg.label}

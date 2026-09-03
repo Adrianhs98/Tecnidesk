@@ -46,6 +46,18 @@
   --nav-shadow: rgba(0, 0, 0, 0.3);
   --canvas-shadow: rgba(0, 0, 0, 0.2);
 
+  /* Airtable Design System Tokens (Dark Mode) */
+  --color-hairline: #272d38;
+  --color-border-strong: #3b4252;
+  --color-border-focus: #f8fafc;
+  --color-focus-ring: 0 0 0 3px rgba(248, 250, 252, 0.22);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-badge: 6px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
+  --color-ink-subtle: #94a3b8;
+
   /* Legacy mappings */
   --bg: var(--bg-canvas);
   --surface: var(--bg-paper);
@@ -101,6 +113,18 @@
   --filter-pill-bg: rgba(0, 0, 0, 0.04);
   --nav-shadow: rgba(100, 70, 30, 0.12);
   --canvas-shadow: rgba(100, 70, 30, 0.08);
+
+  /* Airtable Design System Tokens (Light Mode) */
+  --color-hairline: #dddddd;
+  --color-border-strong: #9297a0;
+  --color-border-focus: #181d26;
+  --color-focus-ring: 0 0 0 3px rgba(24, 29, 38, 0.18);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-badge: 6px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  --color-ink-subtle: #4b5563; /* 7.56:1 AAA */
 
   /* Legacy mappings */
   --bg: var(--bg-canvas);
@@ -1145,21 +1169,23 @@ body {
 
 .ticket-card {
   background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 18px;
+  border: 1px solid var(--color-hairline, var(--border2));
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   animation: slide-up 0.3s ease;
 }
 
 .ticket-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
+  border-color: var(--color-border-strong, var(--accent));
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .ticket-card-header {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--color-hairline, var(--border));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1168,24 +1194,30 @@ body {
 
 .ticket-device-name {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text1);
 }
 
 .ticket-device-brand {
   font-size: 12px;
-  color: var(--text2);
+  color: var(--color-ink-subtle, var(--text2));
   margin-top: 2px;
 }
 
 .ticket-badge {
-  padding: 5px 12px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-badge, 6px);
+  border: 1px solid transparent;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ticket-card-body {
-  padding: 14px 20px;
+  padding: 14px 18px;
 }
 
 .ticket-meta-row {
@@ -1213,9 +1245,9 @@ body {
   color: var(--text2);
   line-height: 1.5;
   background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border: 1px solid var(--color-hairline, var(--border));
+  border-radius: var(--radius-sm, 6px);
+  padding: 9px 12px;
   margin-top: 10px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1224,8 +1256,8 @@ body {
 }
 
 .ticket-card-footer {
-  padding: 12px 20px;
-  border-top: 1px solid var(--border);
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-hairline, var(--border));
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1235,15 +1267,25 @@ body {
 .status-select {
   flex: 1 1 auto;   /* parte del tamaño natural del select, no de cero */
   min-width: 155px; /* piso mínimo: cubre "Esperando aprobación" con holgura */
-  border-radius: 10px;
-  padding: 9px 12px;
+  border: 1px solid var(--color-hairline, var(--border));
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 12px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  background: var(--surface);
+  color: var(--text1);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+  box-shadow: var(--color-focus-ring);
 }
 
 .status-select:hover {
-  border-color: var(--border);
+  border-color: var(--color-border-strong, var(--border));
 }
 
 .btn-save-status {
