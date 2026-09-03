@@ -38,7 +38,15 @@ export default function LoginPage() {
       if (data.shop_name) {
         sessionStorage.setItem("td_shop", data.shop_name);
       }
-      navigate("/admin");
+      const role = data.role || "admin";
+      sessionStorage.setItem("td_role", role);
+      sessionStorage.setItem("td_user_name", data.user_full_name || "");
+
+      if (role === "technician") {
+        navigate("/tech");
+      } else {
+        navigate("/admin");
+      }
     } catch {
       setError("Credenciales incorrectas o servidor inactivo.");
     } finally {

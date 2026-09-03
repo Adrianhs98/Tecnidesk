@@ -2,7 +2,9 @@
 Punto de entrada principal de la aplicación TecniDesk.
 Configura FastAPI, CORS y registra todos los routers.
 """
+# Application entrypoint and router configuration
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 
@@ -14,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
+from app.core.exceptions import EmbeddingServiceUnavailableError
 from app.core.rate_limit import limiter
 from app.routers import health, shops
 
@@ -41,12 +44,36 @@ app = FastAPI(
 )
 # (Aquí seguro ya tienes tu app = FastAPI(...))
 
-# ─── Rate Limiting ────────────────────────────────────────────────────────────
+# ─── Rate Limiting & Exception Handlers ────────────────────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 logger = logging.getLogger("tecnidesk.main")
+
+
+@app.exception_handler(EmbeddingServiceUnavailableError)
+async def embedding_service_unavailable_handler(request: Request, exc: EmbeddingServiceUnavailableError):
+    """Manejo de fallo de conectividad con el servicio local Ollama / Tailscale."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": exc.message or "Local embedding service unavailable. Please check Tailscale Funnel / Mac mini Ollama status.",
+            "code": "EMBEDDING_SERVICE_UNAVAILABLE",
+        },
+    )
+
+# ---------------- CORS Helper ----------------
+_prod_regex = r"^https://(.*\.+)?(tecnidesk\.lat|adriansaas\.xyz)$"
+_prod_regex_compiled = re.compile(_prod_regex)
+
+def _is_allowed_origin(origin: str) -> bool:
+    if not origin:
+        return False
+    allowed = settings.dev_origins + [settings.frontend_url.strip("/")]
+    if origin in allowed:
+        return True
+    return bool(_prod_regex_compiled.fullmatch(origin))
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -57,17 +84,25 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     request_id = str(uuid.uuid4())
     logger.error(f"Unhandled exception [req_id={request_id}] en {request.url.path}: {exc}", exc_info=True)
+    
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin and _is_allowed_origin(origin):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "Error interno del servidor.",
+            "detail": "Internal server error. Revisa los logs.",
             "request_id": request_id,
-        }
+            "error_type": exc.__class__.__name__,
+        },
+        headers=headers,
     )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 # Producción: solo subdominios de tecnidesk.lat y adriansaas.xyz (y dominios raíz)
-_prod_regex = r"^https://(.*\.+)?(tecnidesk\.lat|adriansaas\.xyz)$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,6 +134,9 @@ app.include_router(inventory.router)
 
 from app.routers import clients
 app.include_router(clients.router)
+
+from app.routers import diagnostic
+app.include_router(diagnostic.router)
 
 # RUTAS PÚBLICAS — El antiguo /track fue reemplazado por /tracking (app/api/v1/)
 

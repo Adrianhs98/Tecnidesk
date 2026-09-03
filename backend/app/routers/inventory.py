@@ -1,23 +1,22 @@
 import uuid
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, subscription_guard
 from app.models.user import User
+from app.models.inventory import Inventory
 from app.schemas.inventory import (
     InventoryCreate,
     InventoryResponse,
     InventoryRestock,
     InventoryUpdate,
 )
-from app.services import inventory_service
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
-
-
-from app.schemas.pagination import PaginatedResponse
-from fastapi import Query
 
 @router.get("", response_model=PaginatedResponse[InventoryResponse])
 async def list_inventory(
@@ -29,7 +28,22 @@ async def list_inventory(
     db: AsyncSession = Depends(get_db),
 ):
     """Listar inventario del taller."""
-    items, total = await inventory_service.list_inventory(db, current_user.shop_id, search, False, skip, limit, sku)
+    stmt = select(Inventory).where(Inventory.shop_id == current_user.shop_id)
+    stmt = stmt.where(Inventory.is_active == True)
+        
+    if search:
+        stmt = stmt.where(Inventory.item_name.ilike(f"%{search}%"))
+        
+    if sku and hasattr(Inventory, 'sku'):
+        stmt = stmt.where(Inventory.sku.ilike(f"%{sku}%"))
+            
+    total_query = select(func.count()).select_from(stmt.subquery())
+    total_result = await db.execute(total_query)
+    total = total_result.scalar_one_or_none() or 0
+        
+    stmt = stmt.order_by(Inventory.item_name).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    items = list(result.scalars().all())
     return PaginatedResponse(items=items, total=total)
 
 
@@ -40,7 +54,19 @@ async def create_inventory_item(
     db: AsyncSession = Depends(get_db),
 ):
     """Crear pieza nueva."""
-    return await inventory_service.create_inventory_item(db, current_user.shop_id, data)
+    item = Inventory(
+        shop_id=current_user.shop_id,
+        item_name=data.item_name,
+        stock_quantity=data.stock_quantity,
+        cost_price=data.cost_price,
+        selling_price=data.selling_price,
+        low_stock_alert=data.low_stock_alert,
+        is_active=True,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
 
 
 @router.patch("/{item_id}", response_model=InventoryResponse)
@@ -51,7 +77,20 @@ async def update_inventory_item(
     db: AsyncSession = Depends(get_db),
 ):
     """Editar pieza."""
-    return await inventory_service.update_inventory_item(db, current_user.shop_id, item_id, data)
+    stmt = select(Inventory).where(Inventory.id == item_id, Inventory.shop_id == current_user.shop_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Item de inventario no encontrado")
+        
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+        
+    await db.commit()
+    await db.refresh(item)
+    return item
 
 
 @router.post("/{item_id}/restock", response_model=InventoryResponse)
@@ -62,7 +101,17 @@ async def restock_inventory_item(
     db: AsyncSession = Depends(get_db),
 ):
     """Reabastecer stock."""
-    return await inventory_service.restock_inventory_item(db, current_user.shop_id, item_id, data.quantity)
+    stmt = select(Inventory).where(Inventory.id == item_id, Inventory.shop_id == current_user.shop_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Item de inventario no encontrado")
+        
+    item.stock_quantity += data.quantity
+    await db.commit()
+    await db.refresh(item)
+    return item
 
 
 @router.delete("/{item_id}", status_code=204)
@@ -72,4 +121,12 @@ async def delete_inventory_item(
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-delete pieza (is_active = False)."""
-    await inventory_service.delete_inventory_item(db, current_user.shop_id, item_id)
+    stmt = select(Inventory).where(Inventory.id == item_id, Inventory.shop_id == current_user.shop_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Item de inventario no encontrado")
+        
+    item.is_active = False
+    await db.commit()

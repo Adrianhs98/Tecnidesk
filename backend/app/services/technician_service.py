@@ -11,8 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from app.models.technician import Technician
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.ticket_item import TicketItem
+from app.models.user import User, UserRoleEnum
 from app.schemas.technician import (
     TechnicianCreate,
+    TechnicianMeResponse,
     TechnicianUpdate,
     TechnicianWithMetrics,
     InferredSpecialty,
@@ -29,6 +31,69 @@ class TechnicianNotFound(Exception):
     pass
 
 
+async def grant_technician_access(
+    db: AsyncSession, shop_id: uuid.UUID, technician: Technician, email: str
+) -> User:
+    """
+    Generates system access for a technician. Creates a user, links it, and sends credentials.
+    """
+    from app.core.security import hash_password, generate_random_password
+    from app.services import email_service
+    from app.config import get_settings
+    
+    settings = get_settings()
+
+    # Verify if email exists
+    existing_user = await db.execute(select(User).where(User.email == email))
+    if existing_user.scalar_one_or_none() is not None:
+        raise TechnicianDuplicate("El email ya está registrado para otro usuario.")
+
+    # Get Shop name
+    from app.models.shop import Shop
+    shop = await db.get(Shop, shop_id)
+    shop_name = shop.business_name if shop else "TecniDesk"
+
+    # Generate password
+    plain_pass = generate_random_password(12)
+    
+    # Create user
+    user = User(
+        shop_id=shop_id,
+        role=UserRoleEnum.technician,
+        full_name=technician.full_name,
+        email=email,
+        password_hash=hash_password(plain_pass),
+        is_active=True,
+    )
+    db.add(user)
+    
+    try:
+        await db.flush()
+        technician.user_id = user.id
+        await db.flush()
+        
+        # Send credentials via Resend
+        login_url = f"{settings.frontend_url.rstrip('/')}/login"
+        await email_service.send_technician_credentials_email(
+            to_email=email,
+            password=plain_pass,
+            shop_name=shop_name,
+            login_url=login_url
+        )
+        
+        # If everything succeeds, the caller (or router) commits the transaction.
+        # However, for endpoints using this directly, we could commit here if it's safe.
+        # But we leave it up to the dependency to commit since get_db commits on success.
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, IntegrityError):
+            raise TechnicianDuplicate("Error al crear la cuenta de usuario para el técnico.")
+        # Re-raise the exception from email_service
+        raise Exception("Fallo al enviar correo, acceso no generado") from e
+
+    return user
+
+
 async def create_technician(
     db: AsyncSession, shop_id: uuid.UUID, data: TechnicianCreate
 ) -> Technician:
@@ -41,12 +106,26 @@ async def create_technician(
     )
     db.add(tech)
     try:
-        await db.commit()
-        await db.refresh(tech)
+        await db.flush()
     except IntegrityError:
         await db.rollback()
         raise TechnicianDuplicate("Ya existe un técnico con ese nombre en este taller.")
+        
+    if data.email and getattr(data, "generate_access", False):
+        try:
+            await grant_technician_access(db, shop_id, tech, str(data.email))
+        except Exception:
+            raise
+
+    try:
+        await db.commit()
+        await db.refresh(tech)
+    except Exception:
+        await db.rollback()
+        raise
+        
     return tech
+
 
 
 async def get_technicians(
@@ -262,4 +341,130 @@ async def get_technician_metrics(db: AsyncSession, shop_id: uuid.UUID) -> Techni
             total_attributed=shop_total_attributed,
             total_delivered=shop_total_delivered,
         )
+    )
+
+
+async def get_technician_me(
+    db: AsyncSession, user: User, shop_id: uuid.UUID
+) -> TechnicianMeResponse:
+    """
+    Resuelve el perfil del técnico autenticado con sus estadísticas operacionales
+    (tickets activos, tickets completados, especialidades) sin exponer métricas monetarias.
+    """
+    from sqlalchemy import or_
+
+    # 1. Buscar técnico vinculado por user_id
+    result = await db.execute(
+        select(Technician).where(
+            Technician.shop_id == shop_id,
+            Technician.user_id == user.id,
+        )
+    )
+    tech = result.scalar_one_or_none()
+
+    # 2. Si no está vinculado por user_id, buscar por nombre exacto
+    if not tech:
+        result = await db.execute(
+            select(Technician).where(
+                Technician.shop_id == shop_id,
+                Technician.full_name == user.full_name,
+            )
+        )
+        tech = result.scalar_one_or_none()
+        if tech and tech.user_id is None:
+            tech.user_id = user.id
+            db.add(tech)
+            try:
+                await db.commit()
+                await db.refresh(tech)
+            except IntegrityError:
+                await db.rollback()
+
+    # 3. Si no existe perfil de técnico en la tabla technicians, crearlo automáticamente
+    if not tech:
+        tech = Technician(
+            shop_id=shop_id,
+            full_name=user.full_name,
+            contact=None,
+            declared_specialty=None,
+            is_active=True,
+            user_id=user.id,
+        )
+        db.add(tech)
+        try:
+            await db.commit()
+            await db.refresh(tech)
+        except IntegrityError:
+            await db.rollback()
+            res = await db.execute(
+                select(Technician).where(
+                    Technician.shop_id == shop_id,
+                    Technician.full_name == user.full_name,
+                )
+            )
+            tech = res.scalar_one()
+
+    # 4. Obtener tickets asociados
+    ACTIVE_STATUSES = [
+        TicketStatusEnum.EN_ESPERA_INGRESO,
+        TicketStatusEnum.EN_REVISION,
+        TicketStatusEnum.ESPERANDO_APROBACION,
+        TicketStatusEnum.ESPERANDO_REPUESTO,
+        TicketStatusEnum.EN_REPARACION,
+    ]
+    COMPLETED_STATUSES = [
+        TicketStatusEnum.LISTO_PARA_RETIRAR,
+        TicketStatusEnum.NO_APROBADO,
+    ]
+
+    tickets_res = await db.execute(
+        select(Ticket).where(
+            Ticket.shop_id == shop_id,
+            or_(
+                Ticket.technician_id == tech.id,
+                Ticket.assigned_technician_id == user.id,
+            )
+        )
+    )
+    tickets = list(tickets_res.scalars().all())
+
+    active_count = sum(1 for t in tickets if t.status in ACTIVE_STATUSES)
+    completed_count = sum(1 for t in tickets if t.status in COMPLETED_STATUSES)
+
+    # 5. Obtener especialidades inferidas del historial
+    ticket_ids = [t.id for t in tickets]
+    ticket_items = []
+    if ticket_ids:
+        items_result = await db.execute(
+            select(TicketItem).where(TicketItem.ticket_id.in_(ticket_ids))
+        )
+        ticket_items = list(items_result.scalars().all())
+
+    items_by_ticket = {}
+    for item in ticket_items:
+        items_by_ticket.setdefault(item.ticket_id, []).append(item.description or "")
+
+    diagnostic_texts = []
+    for t in tickets:
+        text_parts = []
+        if t.diagnostic_notes:
+            text_parts.append(t.diagnostic_notes)
+        text_parts.extend(items_by_ticket.get(t.id, []))
+        if text_parts:
+            diagnostic_texts.append(" ".join(text_parts))
+
+    inferred = _infer_specialties(diagnostic_texts)
+
+    role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+
+    return TechnicianMeResponse(
+        id=tech.id,
+        user_id=tech.user_id,
+        full_name=tech.full_name,
+        email=user.email,
+        role=role_str,
+        declared_specialty=tech.declared_specialty,
+        inferred_specialties=inferred,
+        active_tickets_count=active_count,
+        completed_tickets_count=completed_count,
     )

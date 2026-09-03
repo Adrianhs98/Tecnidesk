@@ -8,25 +8,28 @@ import {
   AlertTriangle, 
   Calendar, 
   Lock, 
-  Paperclip, 
   Wrench, 
   ClipboardList, 
   Camera, 
   MessageCircle, 
   X,
-  Eye,
-  EyeOff
+  Eye, 
+  EyeOff,
+  Clock,
+  PackageCheck,
+  Hourglass
 } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
 import { STATUS_CONFIG, ADMIN_STATUSES } from "../../../utils/constants";
-import { formatDate, formatOnlyDate } from "../../../utils/date";
+import { formatDate, formatOnlyDate, formatRelativeAge, isTicketStale } from "../../../utils/date";
 import { maskPhone, maskEmail, maskTrackingCode } from "../../../utils/privacy";
+import { formatCurrency } from "../../../utils/currency";
 import PartsSelector from "./PartsSelector";
 
 const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
 
-export default function AdminTicketCard({ ticket, onStatusChange }) {
+export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds = null }) {
   const cfg = STATUS_CONFIG[ticket.status] || { label: ticket.status, color: "var(--accent)", icon: "📋" };
   const [selectedStatus, setSelectedStatus] = useState(ticket.status);
   const [saving, setSaving] = useState(false);
@@ -73,7 +76,9 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     return () => { mounted = false; };
   }, [showDetail]);
 
+  // Lazy-load evidences ONLY when the detail modal is opened
   useEffect(() => {
+    if (!showDetail) return;
     let mounted = true;
     const fetchEvidences = async () => {
       setLoadingEvidences(true);
@@ -90,8 +95,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     };
     fetchEvidences();
     return () => { mounted = false; };
-  }, [ticket.id]);
-
+  }, [showDetail, ticket.id]);
 
   const handleUploadEvidence = async (e) => {
     const file = e.target.files[0];
@@ -143,10 +147,14 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
         method: "PATCH",
         body: JSON.stringify({ status: selectedStatus }),
       });
-      if (!res.ok) throw new Error(`Error ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Error ${res.status}`);
+      }
       const updated = await res.json();
       onStatusChange(updated);
-    } catch {
+    } catch (err) {
+      alert(err.message || "Error al actualizar estado");
       setSelectedStatus(ticket.status);
     } finally {
       setSaving(false);
@@ -190,7 +198,6 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
   const handleDiagnosticSuccess = (updatedTicket) => {
     setShowDiagModal(false);
     onStatusChange(updatedTicket);
-    // Refresh items
     queryClient.invalidateQueries({ queryKey: ['ticketDetails', ticket.id] });
   };
 
@@ -214,127 +221,181 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
     };
   }, [showDetail, closeDetail]);
 
-  // Ensure overflow is always cleaned up if modal unmounts
   useEffect(() => {
     return () => {
       document.body.style.overflow = "unset";
     };
   }, []);
 
+  const renderExceptionBadges = () => {
+    const badges = [];
+
+    if (!ticket.technician) {
+      badges.push(
+        <span key="no-tech" className="badge-exception badge-warning">
+          <AlertTriangle size={12} /> Sin técnico
+        </span>
+      );
+    }
+
+    if (ticket.status === "EN_REVISION" && !ticket.diagnostic_notes) {
+      badges.push(
+        <span key="no-diag" className="badge-exception badge-muted">
+          <Wrench size={12} /> Sin diagnóstico
+        </span>
+      );
+    }
+
+    if (isTicketStale(ticket.updated_at || ticket.created_at, ticket.status, slaThresholds)) {
+      badges.push(
+        <span key="stale" className="badge-exception badge-danger">
+          <Clock size={12} /> Vencido
+        </span>
+      );
+    }
+
+    if (ticket.status === "LISTO_PARA_RETIRAR") {
+      badges.push(
+        <span key="ready" className="badge-exception badge-success">
+          <PackageCheck size={12} /> Listo p/ retiro
+        </span>
+      );
+    }
+
+    if (ticket.status === "ESPERANDO_APROBACION") {
+      badges.push(
+        <span key="approval" className="badge-exception badge-amber">
+          <Hourglass size={12} /> Esperando aprobación
+        </span>
+      );
+    }
+
+    return badges;
+  };
+
+  const renderSmartAction = () => {
+    // 1. Priority 1: No technician assigned -> Direct assign trigger
+    if (!ticket.technician) {
+      return (
+        <button 
+          className="btn-smart-action btn-smart-warning" 
+          onClick={() => setShowDetail(true)}
+          aria-label="Asignar técnico"
+        >
+          <Wrench size={14} /> Asignar
+        </button>
+      );
+    }
+
+    // 2. Priority 2: In revision without diagnosis -> Direct diagnostic modal trigger
+    if (ticket.status === "EN_REVISION" && !ticket.diagnostic_notes) {
+      return (
+        <button 
+          className="btn-smart-action btn-smart-accent" 
+          onClick={() => setShowDiagModal(true)}
+          aria-label="Diagnosticar equipo"
+        >
+          <ClipboardList size={14} /> Diagnosticar
+        </button>
+      );
+    }
+
+    // 3. Priority 3: Ready for pickup -> WhatsApp notification
+    if (ticket.status === "LISTO_PARA_RETIRAR" && waPhone) {
+      return (
+        <a
+          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
+            `Hola ${ticket.customer?.full_name || ticket._frontendName || ""}, su equipo ${ticket.device_brand} ${ticket.device_model} (#${ticket.tracking_token || ticket.id}) está listo para ser retirado.`
+          )}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-smart-action btn-smart-success"
+          aria-label="WhatsApp: Retiro"
+        >
+          <MessageCircle size={14} /> WhatsApp: Retiro
+        </a>
+      );
+    }
+
+    // 4. Priority 4: Waiting approval -> WhatsApp quote follow-up
+    if (ticket.status === "ESPERANDO_APROBACION" && waPhone) {
+      return (
+        <a
+          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
+            `Hola ${ticket.customer?.full_name || ticket._frontendName || ""}, le recordamos que el presupuesto de su equipo ${ticket.device_brand} ${ticket.device_model} está disponible para su aprobación: ${window.location.origin}/tracking/${ticket.tracking_token || ticket.id}`
+          )}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-smart-action btn-smart-amber"
+          aria-label="WhatsApp: Seguimiento"
+        >
+          <MessageCircle size={14} /> WhatsApp: Seguimiento
+        </a>
+      );
+    }
+
+    // Default: Standard detail button
+    return (
+      <button 
+        className="btn-smart-action btn-smart-secondary" 
+        onClick={() => setShowDetail(true)}
+        aria-label="Ver detalle"
+      >
+        <Eye size={14} /> Ver detalle
+      </button>
+    );
+  };
+
   return (
     <>
-    <div className="ticket-card">
+    <div className="ticket-card workbench-card">
 
-      {/* HEADER: device name, brand badge, status badge */}
+      {/* HEADER: device name, brand badge, tracking, client name, relative age, status badge */}
       <div className="ticket-card-header">
         <div style={{ minWidth: 0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-            <div className="ticket-device-name">{ticket.device_model}</div>
-            <span style={{ fontSize:11, background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text3)", padding:"1px 8px", borderRadius:4, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <span className="ticket-device-name font-bold text-base text-[var(--text1)]">{ticket.device_model}</span>
+            <span className="text-[11px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text3)] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
               {ticket.device_brand}
             </span>
           </div>
-          <div className="ticket-device-brand" style={{ fontFamily:"'Space Grotesk', monospace", color:"var(--accent)", display:"flex", alignItems:"center", gap:8, marginTop: 4 }}>
+          <div className="ticket-device-brand" style={{ fontFamily: "'Space Grotesk', monospace", color: "var(--accent)", display: "flex", alignItems: "center", gap: 8, marginTop: 4, fontSize: 12, flexWrap: "wrap" }}>
             <span>#{maskTrackingCode(ticket.tracking_token || String(ticket.id))}</span>
-            <span style={{ color:"var(--text3)", fontSize: 10 }}>•</span>
-            <span style={{ color: ticket.technician ? "var(--text2)" : "var(--warning)", fontSize: 11, display:"flex", alignItems:"center", gap:4, fontFamily: "inherit", letterSpacing: "normal" }}>
-              <Wrench size={12} /> {ticket.technician?.full_name || "Sin técnico"}
+            <span style={{ color: "var(--text3)", fontSize: 10 }}>•</span>
+            <span style={{ color: "var(--text2)", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}>
+              {ticket.customer?.full_name || ticket._frontendName || ticket.client_email || "Cliente"}
             </span>
-            {!ticket.technician && (
-              <button 
-                onClick={() => setShowDetail(true)}
-                style={{ background: "transparent", border: "1px solid var(--warning)", color: "var(--warning)", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600 }}
-              >
-                Asignar
-              </button>
-            )}
+            <span style={{ color: "var(--text3)", fontSize: 10 }}>•</span>
+            <span style={{ color: "var(--text3)", fontSize: 12, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Clock size={12} /> {formatRelativeAge(ticket.created_at)}
+            </span>
           </div>
         </div>
         <div
           className="ticket-badge"
-          style={{ background: cfg.color + "22", color: cfg.color, border:`1px solid ${cfg.color}44`, flexShrink:0 }}
+          style={{ background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44`, flexShrink: 0 }}
         >
           {cfg.icon === "📋" ? <ClipboardList size={14} style={{ marginRight: 6 }} /> : <span style={{ marginRight: 6, fontSize: 10, fontFamily: "monospace" }}>{cfg.icon}</span>}
           {cfg.label}
         </div>
       </div>
 
-      {/* BODY: 2-column grid — CLIENTE | DETALLES */}
-      <div className="ticket-card-body">
-        {/* Col 1 — Cliente */}
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          <span style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)" }}>Cliente</span>
-          <div className="ticket-meta-row">
-            <span className="ticket-meta-icon"><User size={14} color="var(--text3)" /></span>
-            <span className="ticket-meta-text" style={{ fontWeight:600 }}>
-              {ticket.customer?.full_name || ticket._frontendName || ticket.client_email || "—"}
-            </span>
-          </div>
-          {(ticket.customer?.phone_number || ticket._frontendPhone) && (
-            <div className="ticket-meta-row">
-              <span className="ticket-meta-icon"><Smartphone size={14} color="var(--text3)" /></span>
-              <span className="ticket-meta-text">{maskPhone(ticket.customer?.phone_number || ticket._frontendPhone)}</span>
-            </div>
-          )}
-          <div className="ticket-meta-row">
-            <span className="ticket-meta-icon"><Mail size={14} color="var(--text3)" /></span>
-            <span className="ticket-meta-text">{maskEmail(ticket.client_email || ticket.customer?.email || "—")}</span>
-          </div>
-        </div>
-
-        {/* Col 2 — Detalles */}
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          <span style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--text3)" }}>Detalles</span>
-          {ticket.issue_description && (
-            <div className="ticket-meta-row" style={{ alignItems:"flex-start" }}>
-              <span className="ticket-meta-icon"><AlertTriangle size={14} color="var(--text3)" /></span>
-              <span className="ticket-meta-text">{ticket.issue_description}</span>
-            </div>
-          )}
-          <div className="ticket-meta-row">
-            <span className="ticket-meta-icon"><Calendar size={14} color="var(--text3)" /></span>
-            <span className="ticket-meta-text">Ingreso: {formatOnlyDate(ticket.created_at)}</span>
-          </div>
-        </div>
-
-        {/* METADATA ROW — spans full width, below both columns */}
-        <div style={{ gridColumn:"1 / -1", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:"10px 0 2px", borderTop:"1px solid var(--border)", marginTop:4 }}>
-          {ticket.device_password && ticket.device_password.trim() !== ""
-            ? <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, padding:"2px 8px", borderRadius:6, background:"rgba(201,167,106,0.08)", border:"1px solid rgba(201,167,106,0.25)", color:"var(--accent)" }}><Lock size={12} /> PIN cifrado</span>
-            : <span style={{ fontSize:11, color:"var(--text3)" }}>Sin PIN</span>
-          }
-          <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, color: evidences.length > 0 ? "var(--accent)" : "var(--text3)" }}>
-            <Paperclip size={12} /> {loadingEvidences ? "…" : `${evidences.length} evidencia${evidences.length !== 1 ? "s" : ""}`}
-          </span>
-          {ticket.diagnostic_notes
-            ? <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, color:"var(--text2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:220 }}><Wrench size={12} /> {ticket.diagnostic_notes}</span>
-            : <span style={{ fontSize:11, color:"var(--text3)", fontStyle:"italic" }}>Sin diagnóstico</span>
-          }
-        </div>
+      {/* SIGNALS / EXCEPTION BADGES */}
+      <div className="ticket-card-signals" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "10px 0 14px", padding: "0 20px" }}>
+        <span style={{ color: ticket.technician ? "var(--text2)" : "var(--warning)", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <Wrench size={13} /> {ticket.technician?.full_name || "Sin técnico"}
+        </span>
+        {renderExceptionBadges()}
       </div>
 
-      {/* FOOTER: WhatsApp + status select + save button */}
-      <div className="ticket-card-footer">
-        {waPhone && (
-          <a
-            href={`https://wa.me/${waPhone}?text=${encodeURIComponent(`Hola ${ticket.customer?.full_name || ticket._frontendName || ""}, su equipo ${ticket.device_brand} ${ticket.device_model} fue ingresado. Siga su estado: ${window.location.origin}/tracking/${ticket.tracking_token}`)}`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Contactar por WhatsApp"
-            style={{
-              display:"inline-flex", alignItems:"center", gap:5,
-              padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600,
-              background:"rgba(37,211,102,0.10)", border:"1px solid rgba(37,211,102,0.25)",
-              color:"var(--whatsapp)", textDecoration:"none", flexShrink:0,
-            }}
-          >
-            <MessageCircle size={14} /> WhatsApp
-          </a>
-        )}
+      {/* FOOTER: Smart Action + status select + save button + modal link */}
+      <div className="ticket-card-footer" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto", flexWrap: "wrap" }}>
+        {renderSmartAction()}
         <select
           className="status-select"
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
+          aria-label="Cambiar estado"
         >
           {ADMIN_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
@@ -350,7 +411,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
         <button
           onClick={() => setShowDetail(true)}
           aria-label="Ver detalles del equipo"
-          style={{ marginLeft:"auto", fontSize:12, color:"var(--info)", background:"none", border:"none", cursor:"pointer", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}
+          style={{ marginLeft: "auto", fontSize: 12, color: "var(--info)", background: "none", border: "none", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}
         >
           Ver detalle →
         </button>
@@ -511,7 +572,7 @@ export default function AdminTicketCard({ ticket, onStatusChange }) {
               }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)" }}>Costo Total:</span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: "var(--success)", fontFamily: "monospace" }}>
-                  ${parseFloat(ticket.total_cost || 0).toFixed(2)}
+                  {formatCurrency(ticket.total_cost || 0)}
                 </span>
               </div>
             </div>

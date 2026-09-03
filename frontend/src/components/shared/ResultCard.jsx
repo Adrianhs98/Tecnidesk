@@ -1,5 +1,6 @@
 import { STATUS_CONFIG } from "../../utils/constants";
 import { formatDate } from "../../utils/date";
+import { formatCurrency } from "../../utils/currency";
 import Stepper from "./Stepper";
 
 export default function ResultCard({ data, onRefresh }) {
@@ -43,7 +44,7 @@ export default function ResultCard({ data, onRefresh }) {
         </div>
         <div className="info-tile">
           <div className="tile-label">Presupuesto estimado</div>
-          {data.total_cost ? <div className="tile-value cost">${parseFloat(data.total_cost).toFixed(2)}</div> : <div className="tile-value cost-pending">En evaluacion</div>}
+          {data.total_cost ? <div className="tile-value cost">{formatCurrency(data.total_cost)}</div> : <div className="tile-value cost-pending">En evaluacion</div>}
         </div>
         <div className="info-tile">
           <div className="tile-label">Estado actual</div>

@@ -8,6 +8,7 @@ import ThemeToggle from "../components/shared/ThemeToggle";
 import { API_BASE } from "../api/config";
 import { STATUS_CONFIG } from "../utils/constants";
 import { formatDate } from "../utils/date";
+import { formatCurrency } from "../utils/currency";
 
 export default function TrackingPortal() {
   const { token } = useParams();
@@ -197,7 +198,7 @@ export default function TrackingPortal() {
             </div>
             <div className="info-tile">
               <div className="tile-label">Presupuesto estimado</div>
-              {data.total_cost ? <div className="tile-value cost">${parseFloat(data.total_cost).toFixed(2)}</div> : <div className="tile-value cost-pending">En evaluacion</div>}
+              {data.total_cost ? <div className="tile-value cost">{formatCurrency(data.total_cost)}</div> : <div className="tile-value cost-pending">En evaluacion</div>}
             </div>
             <div className="info-tile">
               <div className="tile-label">Estado actual</div>

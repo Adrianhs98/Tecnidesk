@@ -1,0 +1,451 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Domain rule knowledge base for common smartphone repair cases. Used to seed synthetic diagnostic cases via seed_synthetic_cases.py.",
+    "total_cases": 50,
+    "brands_covered": ["Samsung", "Apple", "Xiaomi", "Motorola", "Huawei"]
+  },
+  "cases": [
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A54 5G",
+      "symptom_text": "El equipo no enciende luego de una caída. No responde a ningún botón ni a la carga.",
+      "diagnosed_cause": "Conector de batería desprendido por el impacto. En casos severos, daño en el IC de carga (S2MU107).",
+      "solution_applied": "Reconectar conector de batería. Si persiste, reemplazar IC de carga S2MU107 y verificar líneas VCC_MAIN bajo microscopio.",
+      "repair_time_minutes": 45,
+      "estimated_cost": 25.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A54 5G",
+      "symptom_text": "Pantalla con líneas verticales y colores distorsionados tras caída. El táctil funciona.",
+      "diagnosed_cause": "Daño en el panel AMOLED interno (cristal líquido fracturado internamente). El flex de datos puede estar íntegro.",
+      "solution_applied": "Reemplazo de pantalla completa AMOLED (módulo + marco). Verificar que el flex de conexión no tenga doblez antes de instalar.",
+      "repair_time_minutes": 60,
+      "estimated_cost": 75.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A54 5G",
+      "symptom_text": "No carga. El cable y el cargador funcionan en otro equipo. Conectado al cargador no aparece ícono de batería.",
+      "diagnosed_cause": "Puerto USB-C dañado mecánicamente o IC de carga (S2MU107) con fallo interno.",
+      "solution_applied": "Inspección del puerto bajo microscopio para pines doblados. Si el puerto está bien, reemplazar IC de carga. Verificar R701 y R703 en líneas CC.",
+      "repair_time_minutes": 90,
+      "estimated_cost": 35.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy S23",
+      "symptom_text": "El teléfono se reinicia solo varias veces al día sin motivo aparente.",
+      "diagnosed_cause": "Batería con ciclos agotados generando caídas de voltaje bajo carga. Descartado problema de software al persistir en Safe Mode.",
+      "solution_applied": "Reemplazo de batería original Samsung EB-BS911ABY. Calibración del porcentaje de batería tras ciclo completo de carga.",
+      "repair_time_minutes": 40,
+      "estimated_cost": 30.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy S23",
+      "symptom_text": "El lector de huella dactilar bajo la pantalla no reconoce el dedo. Fue calibrado en ajustes pero sigue fallando.",
+      "diagnosed_cause": "Protector de pantalla no compatible bloqueando el sensor óptico ultrasónico. En menor medida, fallo del sensor mismo.",
+      "solution_applied": "Remoción del protector incompatible. Instalación de protector certificado para S23. Si el sensor falló, requiere reemplazo de pantalla completa.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 15.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A34",
+      "symptom_text": "Micrófono no funciona en llamadas. El interlocutor no escucha nada. En grabaciones de voz tampoco capta sonido.",
+      "diagnosed_cause": "Micrófono principal (inferior) físicamente dañado o con corrosión en sus pads de soldadura.",
+      "solution_applied": "Limpieza con alcohol isopropílico 99% bajo microscopio. Si no revive, reemplazar micrófono MEMS inferior por componente SMD equivalente.",
+      "repair_time_minutes": 50,
+      "estimated_cost": 20.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A34",
+      "symptom_text": "Cámara trasera principal muestra imagen borrosa que no enfoca. El zoom digital tampoco funciona.",
+      "diagnosed_cause": "Módulo de cámara principal con actuador de autoenfoque (OIS) dañado mecánicamente.",
+      "solution_applied": "Reemplazo del módulo de cámara principal completo 48MP. Verificar que el flex de conexión quede sin torsión.",
+      "repair_time_minutes": 35,
+      "estimated_cost": 45.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A14",
+      "symptom_text": "El botón de encendido se quedó pegado y no responde al tacto. A veces el equipo enciende solo.",
+      "diagnosed_cause": "Botón de encendido con resorte metálico deformado o suciedad acumulada debajo del tactile switch.",
+      "solution_applied": "Desarmado del equipo, limpieza del tactile switch con alcohol isopropílico y aire comprimido. Si el switch está dañado, reemplazar componente SMD.",
+      "repair_time_minutes": 45,
+      "estimated_cost": 18.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 14",
+      "symptom_text": "Pantalla completamente negra tras caída. El equipo vibra al recibir notificaciones (sigue funcionando).",
+      "diagnosed_cause": "Conector de pantalla (J4100) desconectado por el impacto en la lógica principal.",
+      "solution_applied": "Apertura del equipo, reconexión del conector de pantalla J4100 sobre la lógica. Verificar integridad del flex antes de cerrar.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 20.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 14",
+      "symptom_text": "No carga con ningún cable ni adaptador. Ya se probaron 3 cables certificados MFi distintos.",
+      "diagnosed_cause": "Tristar 2 (U2/TIGRIS) o Hydra (U_TIGRIS_2) dañado. También puede ser obstrucción física en el puerto Lightning.",
+      "solution_applied": "Inspección del puerto con luz y aire comprimido. Si el puerto está limpio, diagnóstico de voltaje en PP_USB_VBUS_LDO. Reparación microsoldering del IC de carga.",
+      "repair_time_minutes": 120,
+      "estimated_cost": 80.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 14",
+      "symptom_text": "El Touch ID no funciona. Marca error 'No se puede activar Touch ID en este iPhone'.",
+      "diagnosed_cause": "Botón home reemplazado por uno no original. El Touch ID en iPhone 8 y anteriores está vinculado al Secure Enclave de esa lógica específica.",
+      "solution_applied": "No existe reparación estándar. Se debe reinstalar el botón home original del equipo. Si el botón original está roto, el Touch ID queda permanentemente deshabilitado.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 15.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 13 Pro",
+      "symptom_text": "Batería se descarga de 100% a 0% en menos de 3 horas con uso moderado.",
+      "diagnosed_cause": "Batería con capacidad degradada (salud < 75%). Habitual en equipos con más de 800 ciclos de carga.",
+      "solution_applied": "Reemplazo de batería original Apple (A2657). Calibración post-instalación. Verificar salud en Ajustes > Batería.",
+      "repair_time_minutes": 50,
+      "estimated_cost": 55.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 13 Pro",
+      "symptom_text": "La cámara muestra temblor extremo en video (no es OIS normal). La foto queda movida siempre.",
+      "diagnosed_cause": "Fallo del motor OIS del módulo de cámara principal o del ultrawide. No responde a calibración de software.",
+      "solution_applied": "Reemplazo del módulo de cámara afectado. Verificar que el botón de cámara esté seleccionado correctamente antes de diagnosticar módulo específico.",
+      "repair_time_minutes": 45,
+      "estimated_cost": 120.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 12",
+      "symptom_text": "El equipo muestra pantalla verde intermitente. Sucede especialmente con fondos blancos o de colores claros.",
+      "diagnosed_cause": "Bug de firmware en iOS combinado con fallo del panel OLED propio de este modelo. Apple reconoció el problema.",
+      "solution_applied": "Actualizar a última versión de iOS. Si persiste, reemplazo del panel OLED (Apple cubrió algunos casos bajo garantía extendida).",
+      "repair_time_minutes": 60,
+      "estimated_cost": 70.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 11",
+      "symptom_text": "El Face ID dice 'Face ID no disponible'. No se puede configurar ni reconfigurar.",
+      "diagnosed_cause": "Módulo TrueDepth (cámara frontal con sensores de profundidad) dañado. El Face ID está vinculado a la lógica del equipo.",
+      "solution_applied": "Reemplazo del módulo TrueDepth por uno original (no hay alternativa compatible). Si la lógica fue cambiada previamente, el Face ID no puede ser restaurado.",
+      "repair_time_minutes": 40,
+      "estimated_cost": 90.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi Note 12",
+      "symptom_text": "La pantalla tiene una mancha negra que crece lentamente. No fue por golpe sino que apareció sola.",
+      "diagnosed_cause": "Fuga de cristal líquido del panel LCD interno. Puede ser por presión acumulada (estuche muy ajustado) o defecto de fabricación.",
+      "solution_applied": "Reemplazo del módulo de pantalla completo. Verificar que el estuche del cliente no ejerza presión excesiva sobre el panel.",
+      "repair_time_minutes": 35,
+      "estimated_cost": 40.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi Note 12",
+      "symptom_text": "El altavoz principal emite sonido distorsionado o con crujidos especialmente en volumen alto.",
+      "diagnosed_cause": "Membrana del altavoz inferior dañada por humedad o uso prolongado a volumen máximo.",
+      "solution_applied": "Reemplazo del altavoz inferior (earpiece + speaker assembly). Limpiar la rejilla de altavoz con pincel seco antes de confirmar el daño.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 15.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi Note 12",
+      "symptom_text": "La pantalla no responde al tacto en una zona específica (franja horizontal en el centro).",
+      "diagnosed_cause": "Daño en las tiras conductoras del digitalizador táctil. Puede ser por impacto lateral o flex parcialmente desconectado.",
+      "solution_applied": "Reconectar flex de táctil. Si el problema persiste con flex bien conectado, reemplazar módulo de pantalla completo (LCD + táctil son un solo módulo).",
+      "repair_time_minutes": 40,
+      "estimated_cost": 38.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "POCO X5 Pro",
+      "symptom_text": "El equipo no detecta la tarjeta SIM. Se probó con varias SIM distintas y en otro equipo las SIM funcionan bien.",
+      "diagnosed_cause": "Lector SIM con pines oxidados o doblados. En casos avanzados, IC de RF o PMIC dañado.",
+      "solution_applied": "Inspección y limpieza del lector SIM con alcohol. Enderezar pines doblados con aguja fina. Si no resuelve, diagnóstico de señal de RF con equipo especializado.",
+      "repair_time_minutes": 25,
+      "estimated_cost": 12.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "POCO X5 Pro",
+      "symptom_text": "El equipo se calienta mucho en la parte trasera y se apaga después de 10 minutos de uso.",
+      "diagnosed_cause": "Pasta térmica del procesador Snapdragon 778G agotada o CPU con thermal throttling extremo por polvo acumulado.",
+      "solution_applied": "Limpieza interna profunda, reaplicación de pasta térmica disipadora y verificación del sistema de ventilación/cámara de vapor.",
+      "repair_time_minutes": 60,
+      "estimated_cost": 20.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Xiaomi 13",
+      "symptom_text": "No funciona el WiFi. Aparece el ícono pero dice 'Guardado, protegido' y no conecta. BT tampoco conecta.",
+      "diagnosed_cause": "IC combo WiFi/Bluetooth (WCN3990 o equivalente) dañado o con fallo de firmware. La falla simultánea de WiFi y BT es la firma característica.",
+      "solution_applied": "Primer intento: Hard reset + actualización de firmware. Si persiste, reemplazo del IC combo WiFi/BT mediante microsoldering.",
+      "repair_time_minutes": 90,
+      "estimated_cost": 60.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto G84",
+      "symptom_text": "La pantalla se ve con colores lavados y muy brillante aunque el brillo esté al mínimo.",
+      "diagnosed_cause": "Fallo del sensor de luz ambiental o corrupción del perfil de calibración de pantalla AMOLED.",
+      "solution_applied": "Resetear ajustes de pantalla. Si el sensor de luz falla, reemplazar flex de cámara frontal (incluye sensor de luz en este modelo).",
+      "repair_time_minutes": 30,
+      "estimated_cost": 25.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto G84",
+      "symptom_text": "El equipo se reinicia solo cada vez que recibe una llamada. En reposo funciona bien.",
+      "diagnosed_cause": "Antena de celular (LTE/5G) con mal contacto físico causando picos de corriente al conectar con la red.",
+      "solution_applied": "Verificar y limpiar los puntos de contacto de la antena RF en la placa. Reemplazar antena si el contacto está oxidado.",
+      "repair_time_minutes": 40,
+      "estimated_cost": 20.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto G54",
+      "symptom_text": "El sensor de proximidad falla. Durante las llamadas la pantalla no se apaga y el cliente toca botones con la cara.",
+      "diagnosed_cause": "Sensor de proximidad IR cubierto por lámina de protección de pantalla incompatible o dañado físicamente.",
+      "solution_applied": "Remoción de protector de pantalla. Si el problema persiste, reemplazar flex de cámara frontal que incluye sensor de proximidad.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 18.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto G54",
+      "symptom_text": "Cámara frontal no funciona. La app de cámara muestra pantalla negra al cambiar a frontal. La trasera funciona bien.",
+      "diagnosed_cause": "Flex de cámara frontal desconectado o módulo de cámara frontal dañado.",
+      "solution_applied": "Reconectar flex de cámara frontal. Si el módulo está físicamente dañado (caída, humedad), reemplazar módulo frontal 16MP.",
+      "repair_time_minutes": 25,
+      "estimated_cost": 22.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Motorola Edge 30",
+      "symptom_text": "La vibración háptica dejó de funcionar. No vibra con llamadas, notificaciones ni teclado.",
+      "diagnosed_cause": "Motor háptico lineal (LRA) desconectado o dañado. Es un componente frágil ante caídas.",
+      "solution_applied": "Reconectar cable del motor háptico. Si el motor está averiado, reemplazar motor LRA compatible.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 18.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "P30 Pro",
+      "symptom_text": "La cámara periscopio (zoom 5x) no funciona. Muestra error 'No se puede conectar a la cámara'.",
+      "diagnosed_cause": "Módulo de cámara periscopio con flex dañado o el IC controlador del módulo tiene fallo.",
+      "solution_applied": "Reconectar flex del módulo periscopio. Si el error persiste, reemplazar módulo completo de cámara zoom.",
+      "repair_time_minutes": 50,
+      "estimated_cost": 85.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "P30 Pro",
+      "symptom_text": "Sin señal celular tras cambio de pantalla realizado en otro taller. WiFi funciona.",
+      "diagnosed_cause": "Antena principal desconectada durante la reparación anterior. El P30 Pro tiene antenas integradas en el marco.",
+      "solution_applied": "Apertura del equipo para verificar conexión de antena principal (punto de presión en la placa). Reconectar antena y verificar señal.",
+      "repair_time_minutes": 35,
+      "estimated_cost": 25.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "Nova 9",
+      "symptom_text": "El equipo no reconoce la memoria SD. Formatear la SD tampoco ayuda. En otro teléfono la SD funciona.",
+      "diagnosed_cause": "Lector de tarjeta SD con pines deformados o suciedad en los contactos. Fallo del IC SD controller en casos extremos.",
+      "solution_applied": "Limpieza del lector SD con alcohol isopropílico. Inspección de pines bajo microscopio. Reemplazar lector si los pines están irreparables.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 15.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "Nova 9",
+      "symptom_text": "La pantalla tiene un parpadeo rápido (flickering) constante a bajos niveles de brillo.",
+      "diagnosed_cause": "Frecuencia de PWM del controlador AMOLED demasiado baja para el modelo específico de panel instalado. Puede ser panel no original.",
+      "solution_applied": "Verificar si la pantalla fue reemplazada previamente. Reemplazar por panel original certificado para Nova 9. En panel original, actualizar firmware del dispositivo.",
+      "repair_time_minutes": 40,
+      "estimated_cost": 55.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy S22 Ultra",
+      "symptom_text": "El S-Pen no funciona. El equipo no detecta el stylus en pantalla. El silo del S-Pen está intacto.",
+      "diagnosed_cause": "Digitalizador Wacom EMR (capa adicional bajo el AMOLED) dañado o el IC controlador del S-Pen tiene fallo.",
+      "solution_applied": "Verificar que el S-Pen esté cargado (requiere estar en el silo para cargar). Si está cargado y falla, el digitalizador EMR requiere reemplazo de pantalla completa.",
+      "repair_time_minutes": 70,
+      "estimated_cost": 200.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 15 Pro",
+      "symptom_text": "Puerto USB-C no transfiere datos. Carga bien pero la computadora no reconoce el equipo.",
+      "diagnosed_cause": "IC de datos USB-C (retimer) dañado. El puerto puede cargar (vía CC lines) pero el chip de datos falla.",
+      "solution_applied": "Diagnóstico de continuidad en líneas de datos D+/D-. Reemplazo del retimer USB-C mediante microsoldering de nivel avanzado.",
+      "repair_time_minutes": 150,
+      "estimated_cost": 95.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi 12C",
+      "symptom_text": "El equipo se cayó al agua. Ya está seco pero no enciende.",
+      "diagnosed_cause": "Corto circuito por humedad en la placa lógica. Los condensadores de filtro (C cerca de VCC_MAIN) suelen ser el primer punto de fallo.",
+      "solution_applied": "Limpieza con ultrasonido o alcohol isopropílico 99% en placa. Diagnóstico de consumo de corriente en fuente variable. Identificar y reemplazar componentes cortoircuitados.",
+      "repair_time_minutes": 180,
+      "estimated_cost": 45.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto G32",
+      "symptom_text": "La pantalla tiene una línea horizontal de píxeles muertos que crece con el tiempo.",
+      "diagnosed_cause": "Daño progresivo en el panel LCD por presión puntual o impacto. La línea creciente indica daño de bus de datos del panel.",
+      "solution_applied": "Reemplazo del módulo de pantalla completo. El daño en bus de datos del LCD es irreparable.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 30.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A24",
+      "symptom_text": "Carga muy lentamente. Con cargador oficial de 25W tarda más de 4 horas en llegar al 100%.",
+      "diagnosed_cause": "El puerto USB-C tiene pines de CC (Configuration Channel) doblados, impidiendo la negociación de carga rápida. Carga en modo básico 5V/0.5A.",
+      "solution_applied": "Inspección y reparación de pines CC en el puerto USB-C. Si los pines no son recuperables, reemplazar puerto USB-C.",
+      "repair_time_minutes": 60,
+      "estimated_cost": 22.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone SE (3ra gen)",
+      "symptom_text": "El GPS no localiza. Funciona vagamente en Maps pero la posición salta varios kilómetros.",
+      "diagnosed_cause": "Antena GPS dañada (está en el flex del botón de volumen en este modelo). Puede ser por apertura previa descuidada.",
+      "solution_applied": "Reemplazo del flex de volumen/antena GPS. Verificar calibración de GPS post-reparación en campo abierto.",
+      "repair_time_minutes": 35,
+      "estimated_cost": 28.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "Mate 20 Pro",
+      "symptom_text": "La pantalla OLED tiene quemado (burn-in) con el contorno de la barra de navegación permanentemente visible.",
+      "diagnosed_cause": "Burn-in permanente del panel OLED por uso prolongado con brillo alto y elementos estáticos en pantalla.",
+      "solution_applied": "No existe reparación lógica. Se informa al cliente sobre la naturaleza del daño. Reemplazo del panel OLED como única solución.",
+      "repair_time_minutes": 50,
+      "estimated_cost": 110.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Mi 11",
+      "symptom_text": "El altavoz frontal (earpiece) no suena durante las llamadas. El micrófono funciona bien.",
+      "diagnosed_cause": "Earpiece obstruido con polvo/suciedad o flex de earpiece desconectado. En raros casos, IC de audio dañado.",
+      "solution_applied": "Limpieza del earpiece con pincel seco y aire comprimido. Si no mejora, reconectar flex del earpiece. Si el componente falló, reemplazar earpiece.",
+      "repair_time_minutes": 25,
+      "estimated_cost": 12.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy A13",
+      "symptom_text": "El lector de huella lateral (en el botón de encendido) no responde. Solo funciona el PIN.",
+      "diagnosed_cause": "Sensor de huella integrado en el botón de encendido con fallo mecánico o flex desconectado.",
+      "solution_applied": "Verificar conexión del flex del botón de encendido/huella. Si el sensor está físicamente dañado, reemplazar el conjunto de botón de encendido con sensor integrado.",
+      "repair_time_minutes": 35,
+      "estimated_cost": 22.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone XR",
+      "symptom_text": "El equipo fue mojado y ahora el audio de llamadas suena apagado y tembloroso.",
+      "diagnosed_cause": "Humedad residual en el earpiece/altavoz. La membrana acústica hidrofóbica puede estar saturada de agua.",
+      "solution_applied": "Secar el equipo en cámara de sílica gel por 24-48 horas. Limpiar la rejilla del earpiece. Si la membrana está dañada, reemplazar earpiece.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 15.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Moto E13",
+      "symptom_text": "No conecta a redes 4G, solo 2G o 3G. La SIM y el plan de datos están bien confirmados con el operador.",
+      "diagnosed_cause": "Banda de frecuencia 4G LTE bloqueada en configuración de red o IC de RF con fallo selectivo en bandas LTE.",
+      "solution_applied": "Verificar ajustes de red en *#*#4636#*#* para forzar solo LTE. Si la red preferida ya está en 4G y no conecta, diagnóstico del módulo RF.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 10.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy S21 FE",
+      "symptom_text": "La cámara trasera tiene manchas de niebla o vapor dentro del lente. Aparecieron luego de cambio de temperatura brusco.",
+      "diagnosed_cause": "Condensación interna en el módulo de cámara. El sello de la cámara no es hermético en este modelo ante cambios bruscos de temperatura.",
+      "solution_applied": "Colocar el equipo en bolsa con sílica gel por 24 horas. Si la condensación no desaparece, reemplazar el módulo de cámara afectado.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 50.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi Note 11",
+      "symptom_text": "La pantalla tiene fallos táctiles: registra toques donde no se toca (ghost touch). Especialmente mientras carga.",
+      "diagnosed_cause": "Interferencia eléctrica del cargador sobre el digitalizador táctil. Puede ser por cargador no original o fallo en el filtrado del digitalizador.",
+      "solution_applied": "Probar con cargador original Xiaomi. Si el ghost touch ocurre solo con otros cargadores, es interferencia. Si ocurre siempre, reemplazar módulo táctil.",
+      "repair_time_minutes": 30,
+      "estimated_cost": 35.00
+    },
+    {
+      "device_brand": "Huawei",
+      "device_model": "P40 Lite",
+      "symptom_text": "El equipo fue reseteado de fábrica y ahora pide Huawei ID del propietario anterior que no se recuerda.",
+      "diagnosed_cause": "Activación del bloqueo de cuenta Huawei (equivalente al Find My de Apple). Protección anti-robo activada en el dispositivo.",
+      "solution_applied": "Contactar directamente a Huawei Support con prueba de compra original. No existe método de desbloqueo de hardware. Informar al cliente de la limitación.",
+      "repair_time_minutes": 15,
+      "estimated_cost": 0.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 14 Pro",
+      "symptom_text": "La pantalla tiene una burbuja táctil: en una esquina el vidrio se levanta levemente del marco.",
+      "diagnosed_cause": "Adhesivo perimetral de pantalla cedió, posiblemente por calor excesivo o golpe en el marco. La batería hinchada puede también causar esto.",
+      "solution_applied": "Verificar primero si la batería está hinchada (es urgente si lo está). Si la batería está bien, reaplicar adhesivo perimetral y prensa la pantalla.",
+      "repair_time_minutes": 40,
+      "estimated_cost": 20.00
+    },
+    {
+      "device_brand": "Samsung",
+      "device_model": "Galaxy Z Flip4",
+      "symptom_text": "La pantalla plegable tiene una línea de crease (arrugas) muy marcada en el pliegue central que interfiere con el contenido.",
+      "diagnosed_cause": "El crease es una característica inherente a las pantallas plegables OLED. Un crease excesivo indica uso brusco al doblar o una caída sobre el pliegue.",
+      "solution_applied": "Informar al cliente que el crease leve es normal. Si es excesivo por daño físico, reemplazo de pantalla plegable (proceso de alta complejidad y costo).",
+      "repair_time_minutes": 10,
+      "estimated_cost": 0.00
+    },
+    {
+      "device_brand": "Motorola",
+      "device_model": "Motorola Edge 40",
+      "symptom_text": "El sensor de huellas en pantalla no funciona desde que se le instaló un protector de vidrio templado.",
+      "diagnosed_cause": "Protector de vidrio templado demasiado grueso bloqueando el sensor de huellas óptico bajo la pantalla OLED.",
+      "solution_applied": "Remoción del vidrio templado incompatible. Instalación de protector de hidrogel o TPU ultra delgado certificado para sensores bajo pantalla.",
+      "repair_time_minutes": 15,
+      "estimated_cost": 8.00
+    },
+    {
+      "device_brand": "Xiaomi",
+      "device_model": "Redmi Note 13 Pro",
+      "symptom_text": "La cámara de 200MP tarda muchísimo en capturar y procesar la foto. Se congela la app por 5-10 segundos.",
+      "diagnosed_cause": "Almacenamiento interno casi lleno (>90% usado), lo que ralentiza el buffer de escritura de imágenes de alta resolución.",
+      "solution_applied": "Liberar espacio en el almacenamiento interno (mínimo 10GB libres recomendado). Si el problema persiste con espacio libre, verificar corrupción de la partición de datos.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 0.00
+    },
+    {
+      "device_brand": "Apple",
+      "device_model": "iPhone 13",
+      "symptom_text": "Pantalla con toque fantasma (ghost touch): registra inputs solos especialmente en clima frío.",
+      "diagnosed_cause": "El iPhone 13 tiene un bug conocido de ghost touch en pantallas con variaciones de temperatura. Apple lanzó un programa de reemplazo gratuito.",
+      "solution_applied": "Verificar número de serie en el programa de servicio de Apple (SISP). Si califica, gestionar reemplazo de pantalla bajo el programa. Si no califica, reemplazo de pantalla estándar.",
+      "repair_time_minutes": 20,
+      "estimated_cost": 0.00
+    }
+  ]
+}

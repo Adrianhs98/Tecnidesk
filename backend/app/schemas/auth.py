@@ -43,6 +43,8 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(..., description="JWT de refresh (7 días) — rotar en cada uso")
     token_type: str = Field(default="bearer")
     shop_name: str | None = Field(default=None, description="Nombre del local comercial")
+    role: str | None = Field(default=None, description="Rol del usuario (admin, technician)")
+    user_full_name: str | None = Field(default=None, description="Nombre completo del usuario")
 
     model_config = {
         "json_schema_extra": {
@@ -51,6 +53,8 @@ class TokenResponse(BaseModel):
                     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "token_type": "bearer",
+                    "role": "technician",
+                    "user_full_name": "Carlos Técnico",
                 }
             ]
         }
@@ -78,6 +82,7 @@ class RegisterRequest(BaseModel):
         ...,
         min_length=10,
         max_length=20,
+        pattern=r"^\d+$",
         description="WhatsApp de contacto del taller en formato internacional sin '+'. Ej: 593991234567",
     )
 

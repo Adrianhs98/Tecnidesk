@@ -113,3 +113,50 @@ class ShopOnboardingResponse(BaseModel):
         ...,
         description="Email del administrador creado (para login posterior)",
     )
+
+
+ALLOWED_SLA_STATUSES = {"EN_ESPERA_INGRESO", "EN_REVISION", "EN_REPARACION"}
+
+
+class SlaConfigUpdate(BaseModel):
+    """Schema para actualizar los umbrales de SLA configurables por taller."""
+
+    custom_thresholds: dict[str, int] = Field(
+        ...,
+        description="Mapa de estado a horas de SLA (1-720)",
+        examples=[{"EN_REVISION": 12, "EN_REPARACION": 36}],
+    )
+
+    @field_validator("custom_thresholds", mode="before")
+    @classmethod
+    def validate_keys_and_values(cls, v: dict[str, int]) -> dict[str, int]:
+        if not isinstance(v, dict):
+            raise ValueError("custom_thresholds debe ser un objeto/diccionario.")
+        for k, val in v.items():
+            if k not in ALLOWED_SLA_STATUSES:
+                raise ValueError(f"Estado '{k}' no es configurable para SLA.")
+            if isinstance(val, bool) or not isinstance(val, int) or val < 1 or val > 720:
+                raise ValueError(f"Horas para '{k}' deben ser un entero entre 1 y 720.")
+        return v
+
+
+# Alias para compatibilidad de nomenclatura
+SlaConfigUpdateRequest = SlaConfigUpdate
+
+
+class SlaConfigResponse(BaseModel):
+    """Schema de respuesta con la configuración efectiva y defaults de SLA."""
+
+    effective_thresholds: dict[str, int] = Field(
+        ...,
+        description="Umbrales resultantes combinando defaults con overrides del taller",
+    )
+    custom_thresholds: dict[str, int] = Field(
+        ...,
+        description="Overrides configurados explícitamente por el taller",
+    )
+    default_thresholds: dict[str, int] = Field(
+        ...,
+        description="Umbrales por defecto del sistema",
+    )
+

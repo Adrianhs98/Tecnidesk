@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     mail_from: str = "noreply@tecnidesk.com"
     frontend_url: str = "http://localhost:3000"
 
+    # AI Diagnostic & Embedding Services
+    local_embedding_service_url: str = "http://localhost:11434"
+    gemini_api_key: str = ""
+    gemini_fast_model: str = "gemini-3.5-flash-lite"
+    gemini_reasoning_model: str = "gemini-3.6-flash"
+    gemini_fast_max_output_tokens: int = 320
+    gemini_reasoning_max_output_tokens: int = 700
+
     # CORS — orígenes adicionales para desarrollo local
     # Ejemplo: "http://localhost:3000,http://localhost:5173"
     allowed_origins_dev: str = ""

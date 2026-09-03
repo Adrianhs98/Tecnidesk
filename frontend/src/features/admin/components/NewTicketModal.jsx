@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
+import { previewDiagnosis } from "../../../api/diagnostic";
 
 const emptyForm = { 
   client_name: "", client_phone: "", client_email: "", 
@@ -13,6 +14,8 @@ export default function NewTicketModal({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [fetchingPreview, setFetchingPreview] = useState(false);
   
   const [technicians, setTechnicians] = useState([]);
   
@@ -33,6 +36,22 @@ export default function NewTicketModal({ onClose, onCreated }) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const isEmailValid = emailRegex.test(form.client_email.trim());
   const isPhoneValid = !form.client_phone.trim() || /^\+?[0-9]{7,15}$/.test(form.client_phone.trim());
+
+  const handleBlurSymptom = async () => {
+    if (form.device_brand && form.device_model && form.issue_description.length > 5) {
+      setFetchingPreview(true);
+      try {
+        const res = await previewDiagnosis(form.device_brand, form.device_model, form.issue_description);
+        setPreview(res.suggestion);
+      } catch (e) {
+        setPreview("");
+      } finally {
+        setFetchingPreview(false);
+      }
+    } else {
+      setPreview("");
+    }
+  };
 
   const isValid = ["client_email", "device_brand", "device_model", "issue_description"].every((key) => form[key].trim().length > 0) && isEmailValid && isPhoneValid;
 
@@ -159,7 +178,20 @@ export default function NewTicketModal({ onClose, onCreated }) {
 
           <div className="form-group">
             <label className="form-label">Descripcion del problema <span style={{ color: "var(--accent)" }}>*</span></label>
-            <textarea className="form-textarea" name="issue_description" placeholder="Describe el problema reportado por el cliente..." value={form.issue_description} onChange={handleChange} />
+            <textarea 
+              className="form-textarea" 
+              name="issue_description" 
+              placeholder="Describe el problema reportado por el cliente..." 
+              value={form.issue_description} 
+              onChange={handleChange} 
+              onBlur={handleBlurSymptom}
+            />
+            {fetchingPreview && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>Analizando...</div>}
+            {preview && !fetchingPreview && (
+              <div style={{ marginTop: 6, fontSize: 12, background: "rgba(91,192,222,0.1)", border: "1px solid var(--accent)", padding: "6px 10px", borderRadius: 6, color: "var(--accent)" }}>
+                <strong>IA Sugiere:</strong> {preview}
+              </div>
+            )}
           </div>
 
           <div className="form-group">

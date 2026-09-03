@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, AlertTriangle, AlertCircle } from "lucide-react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
+import { formatCurrency } from "../../../utils/currency";
 
 export default function PartsSelector({ ticketId, items, setItems, status, onItemsUpdated }) {
   const [inventory, setInventory] = useState([]);
@@ -27,7 +28,8 @@ export default function PartsSelector({ ticketId, items, setItems, status, onIte
       try {
         const res = await authFetch(`${API_BASE}/inventory`);
         if (res.ok && mounted) {
-          setInventory(await res.json());
+          const data = await res.json();
+          setInventory(data.items || data);
         }
       } catch (err) {
         console.error("Error fetching inventory:", err);
@@ -175,12 +177,12 @@ export default function PartsSelector({ ticketId, items, setItems, status, onIte
                   {item.description}
                 </span>
                 <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "monospace" }}>
-                  {item.quantity}x @ ${parseFloat(item.unit_price).toFixed(2)}
+                  {item.quantity}x @ {formatCurrency(item.unit_price)}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", fontFamily: "monospace" }}>
-                  ${(parseFloat(item.unit_price) * item.quantity).toFixed(2)}
+                  {formatCurrency(parseFloat(item.unit_price) * item.quantity)}
                 </span>
                 {!isReadOnly && (
                   <button 
@@ -207,7 +209,7 @@ export default function PartsSelector({ ticketId, items, setItems, status, onIte
         <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed var(--border)", fontSize: 13 }}>
           <span style={{ color: "var(--text2)" }}>Subtotal Repuestos:</span>
           <span style={{ fontWeight: 600, fontFamily: "monospace", color: "var(--text1)" }}>
-            ${subtotalParts.toFixed(2)}
+            {formatCurrency(subtotalParts)}
           </span>
         </div>
       )}
@@ -233,7 +235,7 @@ export default function PartsSelector({ ticketId, items, setItems, status, onIte
                     const isLow = i.stock_quantity <= i.low_stock_alert;
                     return (
                       <option key={i.id} value={i.id} disabled={i.stock_quantity === 0}>
-                        {isLow ? "⚠️ " : ""}{i.item_name} (Stock: {i.stock_quantity}) - ${parseFloat(i.selling_price).toFixed(2)}
+                        {isLow ? "⚠️ " : ""}{i.item_name} (Stock: {i.stock_quantity}) - {formatCurrency(i.selling_price)}
                       </option>
                     );
                   })}

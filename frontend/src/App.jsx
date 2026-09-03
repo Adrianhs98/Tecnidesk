@@ -1,3 +1,4 @@
+// Core application router and query client configuration
 import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,6 +8,7 @@ import ProtectedRoute from "./components/guards/ProtectedRoute";
 import PublicRoute from "./components/guards/PublicRoute";
 
 const AdminDashboard = lazy(() => import("./features/admin/AdminDashboard"));
+const TechnicianDashboard = lazy(() => import("./features/technician/TechnicianDashboard"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -83,8 +85,16 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tech"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'technician']}>
+              <TechnicianDashboard />
             </ProtectedRoute>
           }
         />

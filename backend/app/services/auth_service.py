@@ -181,7 +181,7 @@ async def rotate_refresh_token(
         raise ValueError("Usuario no encontrado o inactivo.")
 
     access_token, new_refresh_token = await create_token_pair(db, user)
-    return access_token, new_refresh_token
+    return access_token, new_refresh_token, user
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

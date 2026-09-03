@@ -33,11 +33,8 @@ tmp/
 temp/
 *_datos.py
 tools/
-AGENTS.md
 SOUL.md
 skills-lock.json
-openspec/
-backend/openspec/
 
 # archivos de contexto / planeación / notas
 Gemini.md
@@ -53,8 +50,18 @@ AUDITORIA_*.md
 *_PRIVATE.md
 *_INTERNAL.md
 
-# scripts auxiliares privados en la raíz
+# scripts auxiliares privados y pruebas en la raíz
+*.py
+!backend/**
+!frontend/**
+test_*.py
+!backend/tests/**/test_*.py
+scratch_*.py
+rename_copilot.py
+respuesta.txt
+mem_save_payload.json
 inyectar_datos.py
+injectar_datos.py
 setup_inventario_metabase.py
 formulario_visitas.py
 registro_visitas.py
@@ -107,6 +114,7 @@ backend/*.pyd
 # logs / outputs backend
 backend/*.log
 backend/*.txt
+!backend/requirements.txt
 backend/test_results*.json
 backend/uvicorn*.log
 backend/verification_results*.log
@@ -120,8 +128,8 @@ backend/alembic_error.txt
 backend/alembic_r*.txt
 backend/alembic_result*.txt
 backend/alembic_result2*.txt
-
-# tests y experimentos backend
+# Tests: versionar el código de pruebas.
+# Ignorar solo resultados, cachés y artefactos generados.
 backend/scripts/tmp/
 backend/scripts/experimental/
 

@@ -82,6 +82,19 @@ class TicketEvidenceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TicketStatusHistoryResponse(BaseModel):
+    """Respuesta pública para el historial de transiciones de estado de un ticket."""
+    id: uuid.UUID
+    ticket_id: uuid.UUID
+    from_status: str | None = None
+    to_status: str
+    changed_by_user_id: uuid.UUID | None = None
+    changed_at: datetime
+    reason: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Ticket Principal: Inputs
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -211,6 +224,7 @@ class TicketDetailResponse(TicketResponse):
     technician: TechnicianBasicInfo | None = None
     items: list[TicketItemResponse] = []
     evidences: list[TicketEvidenceResponse] = []
+    status_history: list[TicketStatusHistoryResponse] = []
 
 
 class TicketStatsResponse(BaseModel):
@@ -260,4 +274,32 @@ class PublicTicketResponse(BaseModel):
 class RejectTicketRequest(BaseModel):
     """Payload para rechazar un presupuesto con motivo opcional."""
     rejection_reason: str | None = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Operational Workbench Analytics (Fase 5: Cycle Times & Bottlenecks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class StageDurationMetric(BaseModel):
+    """Métrica de duración y cuello de botella para un estado específico."""
+    status: TicketStatusEnum
+    label: str
+    avg_hours: float
+    percentage_of_total: float
+    is_bottleneck: bool
+
+
+class CycleTimeAnalyticsResponse(BaseModel):
+    """Respuesta con métricas agregadas de Lead Time, Cycle Time y Cuello de Botella."""
+    lead_time_avg_hours: float
+    cycle_time_avg_hours: float
+    sla_compliance_rate: float
+    bottleneck_stage: TicketStatusEnum | None = None
+    bottleneck_stage_label: str | None = None
+    tickets_analyzed_count: int
+    completed_tickets_count: int
+    active_tickets_count: int
+    stage_durations: list[StageDurationMetric]
+    time_window_days: int
+
 
