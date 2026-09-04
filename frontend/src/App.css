@@ -913,6 +913,17 @@ body {
   border-radius: 4px;
 }
 
+.badge-exception {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  line-height: 1.2;
+}
+
 .badge-warning {
   background: rgba(204, 143, 90, 0.12);
   color: var(--warning);
@@ -1181,6 +1192,16 @@ body {
   border-color: var(--color-border-strong, var(--accent));
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
+}
+
+.ticket-card.is-stale {
+  border-color: rgba(157, 92, 82, 0.45);
+  box-shadow: 0 0 0 1px rgba(157, 92, 82, 0.2), var(--shadow-sm);
+}
+
+.ticket-card.is-stale:hover {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger), var(--shadow-md);
 }
 
 .ticket-card-header {

@@ -95,10 +95,10 @@ describe('AdminTicketCard Component', () => {
   });
 
   describe('Exception Badges', () => {
-    it('displays "Sin técnico" badge when ticket has no technician', () => {
+    it('displays "Sin técnico" badge exactly once when ticket has no technician', () => {
       renderCard({ technician: null });
       const badges = screen.getAllByText('Sin técnico');
-      expect(badges.length).toBeGreaterThanOrEqual(1);
+      expect(badges.length).toBe(1);
     });
 
     it('displays "Sin diagnóstico" badge when status is EN_REVISION and diagnostic_notes is missing', () => {
@@ -106,10 +106,15 @@ describe('AdminTicketCard Component', () => {
       expect(screen.getByText('Sin diagnóstico')).toBeInTheDocument();
     });
 
-    it('displays "Vencido" badge when ticket is older than 72 hours in active status', () => {
+    it('displays "Vencido" badge with tooltip and marks card as is-stale when SLA is exceeded', () => {
       const fourDaysAgo = new Date('2026-08-17T12:00:00.000Z').toISOString();
-      renderCard({ created_at: fourDaysAgo, status: 'EN_REPARACION' });
-      expect(screen.getByText('Vencido')).toBeInTheDocument();
+      const { container } = renderCard({ created_at: fourDaysAgo, status: 'EN_REPARACION' });
+
+      const staleBadge = screen.getByTestId('sla-stale-badge');
+      expect(staleBadge).toBeInTheDocument();
+      expect(staleBadge).toHaveTextContent('Vencido');
+      expect(staleBadge).toHaveAttribute('title', 'Tiempo límite de atención superado (SLA vencido)');
+      expect(container.querySelector('.ticket-card')).toHaveClass('is-stale');
     });
 
     it('displays "Listo p/ retiro" badge when status is LISTO_PARA_RETIRAR', () => {
@@ -123,13 +128,14 @@ describe('AdminTicketCard Component', () => {
     });
 
     it('displays no exception badges on a healthy assigned ticket with diagnosis', () => {
-      renderCard({
+      const { container } = renderCard({
         status: 'EN_REPARACION',
         diagnostic_notes: 'Placa reparada',
         created_at: new Date('2026-08-21T10:00:00.000Z').toISOString(),
       });
       expect(screen.queryByText('Sin diagnóstico')).not.toBeInTheDocument();
       expect(screen.queryByText('Vencido')).not.toBeInTheDocument();
+      expect(container.querySelector('.ticket-card')).not.toHaveClass('is-stale');
       expect(screen.queryByText('Listo p/ retiro')).not.toBeInTheDocument();
       expect(screen.queryByText('Esperando aprobación')).not.toBeInTheDocument();
     });

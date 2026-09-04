@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { authFetch } from "../../../api/authFetch";
 import { API_BASE } from "../../../api/config";
 import { previewDiagnosis } from "../../../api/diagnostic";
+import { isValidMobilePhone, cleanPhoneNumber } from "../../../utils/phone";
 
 const emptyForm = { 
   client_name: "", client_phone: "", client_email: "", 
@@ -35,7 +36,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const isEmailValid = emailRegex.test(form.client_email.trim());
-  const isPhoneValid = !form.client_phone.trim() || /^\+?[0-9]{7,15}$/.test(form.client_phone.trim());
+  const isPhoneValid = isValidMobilePhone(form.client_phone);
 
   const handleBlurSymptom = async () => {
     if (form.device_brand && form.device_model && form.issue_description.length > 5) {
@@ -53,7 +54,8 @@ export default function NewTicketModal({ onClose, onCreated }) {
     }
   };
 
-  const isValid = ["client_email", "device_brand", "device_model", "issue_description"].every((key) => form[key].trim().length > 0) && isEmailValid && isPhoneValid;
+  const isFormFilled = ["client_email", "device_brand", "device_model", "issue_description"].every((key) => form[key].trim().length > 0);
+  const isValid = isFormFilled && isEmailValid && isPhoneValid;
 
   const handleSave = async () => {
     if (!["client_email", "device_brand", "device_model", "issue_description"].every((key) => form[key].trim().length > 0)) {
@@ -67,7 +69,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
     }
 
     if (!isPhoneValid) {
-      setError("Por favor ingresa un numero de telefono valido (de 7 a 15 digitos).");
+      setError("Por favor ingresa un numero de celular valido (ej. 0991234567 o +593987654321).");
       return;
     }
 
@@ -78,7 +80,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
       const payload = {
         client_email: form.client_email,
         client_name: form.client_name.trim() || form.client_email,
-        client_phone: form.client_phone.trim() || "",
+        client_phone: cleanPhoneNumber(form.client_phone),
         device_brand: form.device_brand,
         device_model: form.device_model,
         issue_description: form.issue_description,
@@ -155,7 +157,10 @@ export default function NewTicketModal({ onClose, onCreated }) {
             </div>
             <div className="form-group">
               <label className="form-label">Telefono <span style={{ color: "var(--text3)" }}>(opcional)</span></label>
-              <input className="form-input mono" name="client_phone" type="tel" placeholder="ej. 0991234567" value={form.client_phone} onChange={handleChange} />
+              <input className={`form-input mono ${!isPhoneValid ? "border-danger" : ""}`} name="client_phone" type="tel" placeholder="ej. 0991234567" value={form.client_phone} onChange={handleChange} />
+              <p className="form-hint" style={!isPhoneValid ? { color: "var(--danger, #ef4444)" } : undefined}>
+                {!isPhoneValid ? "Formato celular inválido. Usa 09XXXXXXXX o +5939XXXXXXXX." : "Formato celular: 09XXXXXXXX o +5939XXXXXXXX."}
+              </p>
             </div>
           </div>
 
@@ -231,7 +236,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button className="btn-primary" style={{ width: "auto", padding: "11px 24px" }} onClick={handleSave} disabled={saving || !isValid}>
+          <button className="btn-primary" style={{ width: "auto", padding: "11px 24px" }} onClick={handleSave} disabled={saving || !isFormFilled}>
             {saving ? "Guardando..." : "Guardar ticket"}
           </button>
         </div>

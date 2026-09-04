@@ -26,11 +26,13 @@ import { formatDate, formatOnlyDate, formatRelativeAge, isTicketStale } from "..
 import { maskPhone, maskEmail, maskTrackingCode } from "../../../utils/privacy";
 import { formatCurrency } from "../../../utils/currency";
 import PartsSelector from "./PartsSelector";
+import StatusBadge from "../../../components/shared/StatusBadge";
 
 const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
 
 export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds = null }) {
   const cfg = STATUS_CONFIG[ticket.status] || { label: ticket.status, color: "var(--accent)", icon: "📋" };
+  const stale = isTicketStale(ticket.updated_at || ticket.created_at, ticket.status, slaThresholds);
   const [selectedStatus, setSelectedStatus] = useState(ticket.status);
   const [saving, setSaving] = useState(false);
   const [showPii, setShowPii] = useState(false);
@@ -230,14 +232,6 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
   const renderExceptionBadges = () => {
     const badges = [];
 
-    if (!ticket.technician) {
-      badges.push(
-        <span key="no-tech" className="badge-exception badge-warning">
-          <AlertTriangle size={12} /> Sin técnico
-        </span>
-      );
-    }
-
     if (ticket.status === "EN_REVISION" && !ticket.diagnostic_notes) {
       badges.push(
         <span key="no-diag" className="badge-exception badge-muted">
@@ -246,9 +240,14 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
       );
     }
 
-    if (isTicketStale(ticket.updated_at || ticket.created_at, ticket.status, slaThresholds)) {
+    if (stale) {
       badges.push(
-        <span key="stale" className="badge-exception badge-danger">
+        <span
+          key="stale"
+          className="badge-exception badge-danger"
+          data-testid="sla-stale-badge"
+          title="Tiempo límite de atención superado (SLA vencido)"
+        >
           <Clock size={12} /> Vencido
         </span>
       );
@@ -348,7 +347,7 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
 
   return (
     <>
-    <div className="ticket-card workbench-card">
+    <div className={`ticket-card workbench-card ${stale ? "is-stale" : ""}`} data-testid={`admin-ticket-card-${ticket.id}`}>
 
       {/* HEADER: device name, brand badge, tracking, client name, relative age, status badge */}
       <div className="ticket-card-header">
@@ -371,24 +370,13 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
             </span>
           </div>
         </div>
-        <div
-          className="ticket-badge"
-          style={{
-            backgroundColor: cfg.bg || `${cfg.color}18`,
-            color: cfg.color,
-            borderColor: cfg.border || `${cfg.color}40`,
-            flexShrink: 0,
-          }}
-        >
-          {cfg.icon === "📋" ? <ClipboardList size={14} style={{ marginRight: 6 }} /> : <span style={{ marginRight: 6, fontSize: 10, fontFamily: "monospace" }}>{cfg.icon}</span>}
-          {cfg.label}
-        </div>
+        <StatusBadge status={ticket.status} />
       </div>
 
       {/* SIGNALS / EXCEPTION BADGES */}
       <div className="ticket-card-signals" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "10px 0 14px", padding: "0 20px" }}>
         <span style={{ color: ticket.technician ? "var(--text2)" : "var(--warning)", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <Wrench size={13} /> {ticket.technician?.full_name || "Sin técnico"}
+          {ticket.technician ? <Wrench size={13} /> : <AlertTriangle size={13} />} {ticket.technician?.full_name || "Sin técnico"}
         </span>
         {renderExceptionBadges()}
       </div>

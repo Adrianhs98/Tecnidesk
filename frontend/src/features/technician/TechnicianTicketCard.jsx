@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Smartphone, Clock, AlertCircle, CheckCircle2, Wrench, ArrowRight, User } from "lucide-react";
-import { STATUS_CONFIG } from "../../utils/constants";
+import StatusBadge from "../../components/shared/StatusBadge";
 import { formatRelativeAge, isTicketStale } from "../../utils/date";
 import { maskPhone } from "../../utils/privacy";
 
@@ -13,10 +13,6 @@ export default function TechnicianTicketCard({
   slaThresholds = null,
   isReadOnly = false,
 }) {
-  const statusCfg = STATUS_CONFIG[ticket.status] || {
-    label: ticket.status,
-    color: "var(--accent)",
-  };
 
   const isOverdue = useMemo(() => {
     return isTicketStale(ticket.updated_at || ticket.created_at, ticket.status, slaThresholds);
@@ -52,15 +48,7 @@ export default function TechnicianTicketCard({
               </>
             )}
           </span>
-          <span
-            className="tech-status-pill"
-            style={{
-              borderColor: statusCfg.color,
-              color: statusCfg.color,
-            }}
-          >
-            {statusCfg.label}
-          </span>
+          <StatusBadge status={ticket.status} />
         </div>
       </div>
 

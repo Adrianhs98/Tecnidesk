@@ -440,6 +440,15 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       expect(screen.getByText(/Trabajar en Equipo/i)).toBeInTheDocument();
     });
 
+    it("renders unified StatusBadge with DESIGN.md tokens and removes legacy pill", () => {
+      const { container } = render(<TechnicianTicketCard ticket={mockTicket} />);
+
+      expect(screen.getByText("En revision")).toBeInTheDocument();
+      expect(screen.getByText("REV")).toBeInTheDocument();
+      expect(container.querySelector(".ticket-badge")).toBeInTheDocument();
+      expect(container.querySelector(".tech-status-pill")).not.toBeInTheDocument();
+    });
+
     it("renders in available mode with 'Tomar Reparación' action", () => {
       const onTakeSpy = vi.fn();
       render(
