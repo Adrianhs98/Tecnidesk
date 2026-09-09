@@ -8,9 +8,10 @@ SEGURIDAD CRÍTICA:
 """
 import enum
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -62,6 +63,10 @@ class Ticket(UUIDMixin, TimestampMixin, Base):
     issue_description: Mapped[str] = mapped_column(Text, nullable=False)
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnostic_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_diagnostic: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnostic_applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # CIFRADO con Fernet (D2) — almacena el token Fernet cifrado, no el PIN

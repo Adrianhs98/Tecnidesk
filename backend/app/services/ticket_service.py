@@ -202,6 +202,7 @@ async def create_ticket(
     db: AsyncSession,
     shop_id: uuid.UUID,
     data: "TicketCreate",  # noqa: F821 — schema definido en app/schemas/
+    created_by_user_id: uuid.UUID | None = None,
 ) -> tuple[Ticket, str | None]:
     """
     Crea una nueva orden de reparación.
@@ -294,7 +295,7 @@ async def create_ticket(
             ticket_id=ticket.id,
             from_status=None,
             to_status=ticket.status.value,
-            changed_by_user_id=None,
+            changed_by_user_id=created_by_user_id,
             reason="Creación de la orden de reparación",
         )
         await db.commit()
@@ -716,6 +717,7 @@ async def list_tickets(
         ]
         stmt = stmt.where(Ticket.status.not_in(estados_inactivos))
     
+    search = search.strip() if search else None
     if search:
         search_term = f"%{search}%"
         conditions = [

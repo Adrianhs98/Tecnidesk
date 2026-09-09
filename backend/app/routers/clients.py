@@ -23,6 +23,7 @@ async def get_clients(
 ):
     query = select(Customer).where(Customer.shop_id == current_user.shop_id)
 
+    search = search.strip() if search else None
     if search:
         search_term = f"%{search}%"
         query = query.where(

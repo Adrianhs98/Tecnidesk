@@ -4,7 +4,7 @@ Modelo: shops — Talleres de reparación (clientes del SaaS).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, JSON, String
+from sqlalchemy import Boolean, DateTime, Enum, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDMixin
@@ -28,6 +28,11 @@ class Shop(UUIDMixin, Base):
 
     # Configuración de SLAs por estado en formato JSON
     sla_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
+
+    # Permiso para que técnicos ingresen equipos al taller (default opt-in: False)
+    allow_technician_intake: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
 
     # Contacto del taller (MVP)
     contact_email: Mapped[str] = mapped_column(String(254), nullable=False)

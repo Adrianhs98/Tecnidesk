@@ -12,6 +12,7 @@ export default function TechniciansModal({ onClose }) {
   const [view, setView] = useState("list"); // 'list' | 'form'
   const [formData, setFormData] = useState({ id: null, full_name: "", contact: "", declared_specialty: "", email: "", generate_access: false });
   const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   const fetchMetrics = async () => {
     setLoading(true);
@@ -33,22 +34,38 @@ export default function TechniciansModal({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError(null);
+
+    const fullName = (formData.full_name || "").trim();
+    if (fullName.length < 2) {
+      setFormError("El nombre completo debe tener al menos 2 caracteres.");
+      return;
+    }
+
+    const isEdit = !!formData.id;
+    const contactClean = formData.contact ? formData.contact.trim() : null;
+    const specialtyClean = formData.declared_specialty ? formData.declared_specialty.trim() : null;
+
+    const payload = {
+      full_name: fullName,
+      contact: contactClean || null,
+      declared_specialty: specialtyClean || null
+    };
+
+    if (!isEdit && formData.generate_access) {
+      const email = (formData.email || "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setFormError("Por favor ingresa un correo electrónico válido.");
+        return;
+      }
+      payload.generate_access = true;
+      payload.email = email;
+    }
+
     setFormLoading(true);
     try {
-      const isEdit = !!formData.id;
       const url = isEdit ? `${API_BASE}/technicians/${formData.id}` : `${API_BASE}/technicians`;
       const method = isEdit ? "PATCH" : "POST";
-      
-      const payload = {
-        full_name: formData.full_name,
-        contact: formData.contact || null,
-        declared_specialty: formData.declared_specialty || null
-      };
-
-      if (!isEdit && formData.generate_access) {
-        payload.generate_access = true;
-        payload.email = formData.email;
-      }
 
       const res = await authFetch(url, {
         method,
@@ -57,14 +74,14 @@ export default function TechniciansModal({ onClose }) {
       });
 
       if (!res.ok) {
-        const d = await res.json();
+        const d = await res.json().catch(() => ({}));
         throw new Error(d.detail || "Error al guardar");
       }
 
       await fetchMetrics();
       setView("list");
     } catch (err) {
-      alert(err.message);
+      setFormError(err.message);
     } finally {
       setFormLoading(false);
     }
@@ -183,6 +200,7 @@ export default function TechniciansModal({ onClose }) {
             
             <div style={{ display: "flex", gap: "8px", flexDirection: "column" }}>
               <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => {
+                setFormError(null);
                 setFormData({ id: tech.id, full_name: tech.full_name, contact: tech.contact || "", declared_specialty: tech.declared_specialty || "", email: "", generate_access: false });
                 setView("form");
               }} title="Editar Técnico">
@@ -216,6 +234,11 @@ export default function TechniciansModal({ onClose }) {
 
   const renderForm = () => (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {formError && (
+        <div className="admin-error-bar" style={{ marginBottom: "8px" }}>
+          <span>ERROR</span> {formError}
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Nombre Completo *</label>
         <input 
@@ -277,7 +300,7 @@ export default function TechniciansModal({ onClose }) {
       )}
 
       <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-        <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setView("list")} disabled={formLoading}>Cancelar</button>
+        <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => { setFormError(null); setView("list"); }} disabled={formLoading}>Cancelar</button>
         <button type="submit" className="btn-primary" style={{ flex: 1 }} disabled={formLoading}>
           {formLoading ? "Guardando..." : "Guardar Técnico"}
         </button>
@@ -301,6 +324,7 @@ export default function TechniciansModal({ onClose }) {
           <div style={{ display: "flex", gap: "12px" }}>
             {view === "list" && (
               <button className="btn-new-ticket" onClick={() => {
+                setFormError(null);
                 setFormData({ id: null, full_name: "", contact: "", declared_specialty: "", email: "", generate_access: false });
                 setView("form");
               }} style={{ padding: "8px 16px", fontSize: "13px" }}>

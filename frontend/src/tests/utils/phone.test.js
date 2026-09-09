@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { isValidMobilePhone, cleanPhoneNumber } from '../../utils/phone';
+import { 
+  isValidMobilePhone, 
+  cleanPhoneNumber, 
+  normalizeWhatsAppNumber, 
+  isValidWhatsAppNumber 
+} from '../../utils/phone';
 
 describe('Phone Validation Utility', () => {
   describe('cleanPhoneNumber', () => {
@@ -57,6 +62,62 @@ describe('Phone Validation Utility', () => {
       expect(isValidMobilePhone('   ')).toBe(true);
       expect(isValidMobilePhone(null)).toBe(true);
       expect(isValidMobilePhone(undefined)).toBe(true);
+    });
+  });
+
+  describe('normalizeWhatsAppNumber', () => {
+    it('converts Ecuadorian national mobile numbers (09...) to international 5939...', () => {
+      expect(normalizeWhatsAppNumber('0991234567')).toBe('593991234567');
+      expect(normalizeWhatsAppNumber('098-765-4321')).toBe('593987654321');
+      expect(normalizeWhatsAppNumber('(099) 123 4567')).toBe('593991234567');
+    });
+
+    it('strips plus and formatting from international numbers', () => {
+      expect(normalizeWhatsAppNumber('+593 99 123 4567')).toBe('593991234567');
+      expect(normalizeWhatsAppNumber('+593991234567')).toBe('593991234567');
+      expect(normalizeWhatsAppNumber('+1 (555) 123-4567')).toBe('15551234567');
+    });
+
+    it('preserves clean numeric strings', () => {
+      expect(normalizeWhatsAppNumber('593991234567')).toBe('593991234567');
+    });
+
+    it('returns empty string for empty, null, or invalid inputs', () => {
+      expect(normalizeWhatsAppNumber('')).toBe('');
+      expect(normalizeWhatsAppNumber(null)).toBe('');
+      expect(normalizeWhatsAppNumber(undefined)).toBe('');
+    });
+  });
+
+  describe('isValidWhatsAppNumber', () => {
+    it('accepts valid Ecuadorian mobile numbers in national or international format', () => {
+      expect(isValidWhatsAppNumber('0991234567')).toBe(true);
+      expect(isValidWhatsAppNumber('+593991234567')).toBe(true);
+      expect(isValidWhatsAppNumber('+593 99-123-4567')).toBe(true);
+      expect(isValidWhatsAppNumber('593991234567')).toBe(true);
+    });
+
+    it('rejects numbers that are too short or too long', () => {
+      expect(isValidWhatsAppNumber('12345')).toBe(false);
+      expect(isValidWhatsAppNumber('099123')).toBe(false);
+      expect(isValidWhatsAppNumber('123456789012345678901')).toBe(false); // > 20
+    });
+
+    it('rejects provincial landlines', () => {
+      expect(isValidWhatsAppNumber('022345678')).toBe(false);
+      expect(isValidWhatsAppNumber('+59322345678')).toBe(false);
+    });
+
+    it('rejects non-numeric characters that leave invalid string', () => {
+      expect(isValidWhatsAppNumber('593abc12345')).toBe(false);
+      expect(isValidWhatsAppNumber('whatsapp')).toBe(false);
+    });
+
+    it('rejects empty, null or undefined values', () => {
+      expect(isValidWhatsAppNumber('')).toBe(false);
+      expect(isValidWhatsAppNumber('   ')).toBe(false);
+      expect(isValidWhatsAppNumber(null)).toBe(false);
+      expect(isValidWhatsAppNumber(undefined)).toBe(false);
     });
   });
 });

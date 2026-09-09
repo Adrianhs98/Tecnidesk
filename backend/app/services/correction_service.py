@@ -1,7 +1,8 @@
 import asyncio
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +16,13 @@ from app.models.ticket import Ticket
 from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
 from app.services.embedding_service import EmbeddingService
 from app.services.model_router import ModelRouter
+from app.services.ai_safety_service import (
+    classify_message_safety,
+    log_ai_security_event,
+    CANNED_REDIRECT_RESPONSE,
+    ANTI_INJECTION_SYSTEM_INSTRUCTION,
+    SANDWICH_PROMPT_REMINDER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,22 +66,53 @@ class CorrectionService:
                 if conv is None:
                     raise
             
+            
         return conv
 
     @staticmethod
     async def handle_chat_message(db: AsyncSession, shop_id: uuid.UUID, technician_id: uuid.UUID, ticket_id: uuid.UUID, message_in: DiagnosticMessageIn) -> DiagnosticMessageResponse:
         conv = await CorrectionService.get_or_create_conversation(db, shop_id, technician_id, ticket_id)
+        conv_id = conv.id
         
         user_msg = DiagnosticMessage(
-            conversation_id=conv.id,
+            conversation_id=conv_id,
             role="technician",
             content=message_in.message
         )
         db.add(user_msg)
         await db.commit()
         await db.refresh(user_msg)
-        
-        stmt = select(DiagnosticMessage).where(DiagnosticMessage.conversation_id == conv.id).order_by(DiagnosticMessage.created_at.asc())
+
+        safety = await classify_message_safety(message_in.message)
+        if safety.injection_attempt or not safety.on_topic:
+            if safety.injection_attempt:
+                await log_ai_security_event(
+                    db=db,
+                    shop_id=shop_id,
+                    technician_id=technician_id,
+                    ticket_id=ticket_id,
+                    event_type="injection_attempt",
+                    message_excerpt=message_in.message,
+                )
+            asst_msg = DiagnosticMessage(
+                conversation_id=conv_id,
+                role="assistant",
+                content=CANNED_REDIRECT_RESPONSE,
+            )
+            db.add(asst_msg)
+            await db.commit()
+            await db.refresh(asst_msg)
+
+            return DiagnosticMessageResponse(
+                id=asst_msg.id,
+                role=asst_msg.role,
+                content=asst_msg.content,
+                created_at=asst_msg.created_at,
+                model_route="safety_guard",
+                model="canned",
+            )
+
+        stmt = select(DiagnosticMessage).where(DiagnosticMessage.conversation_id == conv_id).order_by(DiagnosticMessage.created_at.asc())
         result = await db.execute(stmt)
         messages = result.scalars().all()
         
@@ -83,11 +122,14 @@ class CorrectionService:
         
         route = ModelRouter.select(message_in.message, ticket_context=True, prior_messages=messages[:-1])
         history = "\n".join(f"{msg.role}: {msg.content[:800]}" for msg in messages[-8:])
+        device_context = f"Device: {ticket.device_brand} {ticket.device_model}. Symptom: {ticket.issue_description}." if ticket else ""
         prompt = (
             "You are Ohm, a repair technician assistant. Give concise, actionable steps. "
             "Do not repeat the ticket context.\n"
-            f"Device: {ticket.device_brand} {ticket.device_model}. Symptom: {ticket.issue_description}.\n"
-            f"Recent chat:\n{history}"
+            f"{ANTI_INJECTION_SYSTEM_INSTRUCTION}\n"
+            f"{device_context}\n"
+            f"Recent chat:\n{history}\n"
+            f"{SANDWICH_PROMPT_REMINDER}"
         )
             
         settings = get_settings()
@@ -228,3 +270,128 @@ class CorrectionService:
             diagnosed_cause=new_case.diagnosed_cause,
             solution_applied=new_case.solution_applied
         )
+
+    @staticmethod
+    async def generate_final_diagnostic(db: AsyncSession, ticket: Ticket) -> str:
+        """
+        Sintetiza la conversación técnica con Ohm en un diagnóstico comprensible
+        para el cliente final y lo guarda como borrador (draft_diagnostic).
+        """
+        stmt = select(DiagnosticConversation).where(
+            DiagnosticConversation.ticket_id == ticket.id,
+            DiagnosticConversation.shop_id == ticket.shop_id,
+        ).order_by(DiagnosticConversation.created_at.desc())
+        result = await db.execute(stmt)
+        convs = result.scalars().all()
+        if not convs:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No hay conversación previa con Ohm para sintetizar."
+            )
+
+        conv_ids = [c.id for c in convs]
+        msg_stmt = select(DiagnosticMessage).where(
+            DiagnosticMessage.conversation_id.in_(conv_ids)
+        ).order_by(DiagnosticMessage.created_at.asc())
+        msg_res = await db.execute(msg_stmt)
+        messages = msg_res.scalars().all()
+
+        if not messages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No hay conversación previa con Ohm para sintetizar."
+            )
+
+        settings = get_settings()
+        client = genai.Client(api_key=settings.gemini_api_key)
+
+        transcript = "\n".join([f"[{m.role.upper()}]: {m.content}" for m in messages])
+        synthesis_prompt = (
+            f"Eres Ohm, el copiloto técnico experto de TecniDesk.\n"
+            f"Tu tarea es redactar el DIAGNÓSTICO FINAL TÉCNICO Y PROCEDIMIENTO REALIZADO para entregar al CLIENTE FINAL (propietario del equipo).\n\n"
+            f"INFORMACIÓN DEL EQUIPO:\n"
+            f"- Marca y Modelo: {ticket.device_brand} {ticket.device_model}\n"
+            f"- Problema Reportado: {ticket.issue_description}\n\n"
+            f"HISTORIAL DE CONVERSACIÓN TÉCNICA:\n"
+            f"{transcript}\n\n"
+            f"DIRECTIVAS ESTRICTAS DE REDACCIÓN:\n"
+            f"1. Escribe en tono profesional, empático y claro, apto para el cliente.\n"
+            f"2. Explica la causa raíz confirmada durante la revisión/reparación y qué solución o cambio se aplicó.\n"
+            f"3. NO uses jerga interna confusa ni nombres de pines o diagramas esquemáticos.\n"
+            f"4. NO menciones hipótesis que fueron descartadas durante la conversación.\n"
+            f"5. NO inventes procedimientos o repuestos que no aparezcan en el historial.\n"
+            f"6. Entrega directamente el texto del diagnóstico sin preámbulos, títulos ni despedidas meta."
+        )
+
+        retries = 3
+        backoff_delays = [1, 2, 4]
+        ai_text = None
+
+        for attempt in range(retries):
+            try:
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini_reasoning_model,
+                    contents=synthesis_prompt,
+                )
+                ai_text = response.text.strip() if response and response.text else None
+                if ai_text:
+                    break
+            except Exception as e:
+                is_503 = (
+                    (isinstance(e, errors.APIError) and e.code == 503)
+                    or getattr(e, "code", None) == 503
+                    or getattr(e, "status_code", None) == 503
+                    or "503" in str(e)
+                )
+                if is_503 and attempt < retries - 1:
+                    logger.warning(
+                        f"Gemini 503 Service Unavailable on synthesis attempt {attempt + 1}/{retries}. "
+                        f"Retrying in {backoff_delays[attempt]}s..."
+                    )
+                    await asyncio.sleep(backoff_delays[attempt])
+                elif is_503:
+                    logger.error(f"Gemini 503 Service Unavailable exhausted all {retries} retries for diagnostic synthesis.")
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Ohm no está disponible temporalmente por alta demanda (503). Intenta de nuevo en unos momentos."
+                    )
+                else:
+                    logger.error(f"Error calling Gemini for diagnostic synthesis: {e}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Error al generar diagnóstico con Ohm: {str(e)}"
+                    )
+
+        if not ai_text:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Ohm no generó una respuesta válida para el diagnóstico."
+            )
+
+        ticket.draft_diagnostic = ai_text
+        await db.commit()
+        return ai_text
+
+    @staticmethod
+    async def apply_final_diagnostic(
+        db: AsyncSession, ticket: Ticket, edited_diagnostic: str | None = None
+    ) -> Ticket:
+        """
+        Aplica el borrador de diagnóstico generado por Ohm a las notas públicas del ticket,
+        permitiendo una versión editada opcionalmente por el técnico.
+        """
+        if ticket.draft_diagnostic is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No hay un diagnóstico generado para aplicar."
+            )
+
+        clean_edit = edited_diagnostic.strip() if edited_diagnostic and edited_diagnostic.strip() else None
+        final_text = clean_edit or ticket.draft_diagnostic
+
+        ticket.draft_diagnostic = final_text
+        ticket.diagnostic_notes = final_text
+        ticket.diagnostic_applied_at = datetime.now(timezone.utc)
+
+        await db.commit()
+        return ticket

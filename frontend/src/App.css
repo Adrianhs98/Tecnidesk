@@ -832,7 +832,7 @@ body {
 .admin-body {
   flex: 1;
   padding: 28px 24px 60px;
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   width: 100%;
 }
@@ -1068,8 +1068,8 @@ body {
   gap: 16px;
   box-shadow: 0 8px 24px var(--nav-shadow);
   z-index: 100;
-  width: 90%;
-  max-width: 1050px;
+  width: 95%;
+  max-width: 1550px;
 }
 
 .nav-pill-brand {
@@ -1088,7 +1088,8 @@ body {
 
 .workbench-canvas {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1500px;
+  margin: 0 auto;
   background: var(--bg-paper);
   border: 1px solid var(--border-subtle);
   border-radius: 24px;
@@ -1118,6 +1119,72 @@ body {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--text3);
+  pointer-events: none;
+}
+
+.search-input-wrapper .search-input {
+  padding-left: 38px;
+  width: 100%;
+}
+
+.toolbar-date-input {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.toolbar-clear-date {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.toolbar-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.toolbar-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px var(--accent-glow-28);
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.toolbar-cta-btn:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 12px var(--accent-glow-40);
+}
+
+.toolbar-cta-btn:active {
+  transform: scale(0.98);
 }
 
 .workbench-content {
@@ -1179,13 +1246,18 @@ body {
 
 
 .ticket-card {
-  background: var(--surface);
+  background: var(--bg-surface);
   border: 1px solid var(--color-hairline, var(--border2));
   border-radius: var(--radius-md, 8px);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   animation: slide-up 0.3s ease;
+}
+
+[data-theme="light"] .ticket-card {
+  background: var(--bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .ticket-card:hover {
@@ -2625,14 +2697,20 @@ select:focus-visible {
 
 /* Ticket Card */
 .tech-ticket-card {
-  background: var(--bg-paper);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="light"] .tech-ticket-card {
+  background: var(--bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .tech-ticket-card:hover {
@@ -2643,7 +2721,7 @@ select:focus-visible {
 
 .tech-ticket-card.is-overdue {
   border-color: var(--color-danger);
-  background: linear-gradient(to bottom right, var(--bg-paper), var(--error-bg));
+  background: linear-gradient(to bottom right, var(--bg-surface), var(--error-bg));
 }
 
 .tech-card-header {

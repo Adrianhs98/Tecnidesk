@@ -17,6 +17,7 @@ class ClientService:
     ) -> Tuple[List[Customer], int]:
         query = select(Customer).where(Customer.shop_id == shop_id)
 
+        search = search.strip() if search else None
         if search:
             search_term = f"%{search}%"
             query = query.where(

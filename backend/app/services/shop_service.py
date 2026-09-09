@@ -192,3 +192,45 @@ async def update_shop_sla_config(
     }
 
 
+async def get_shop_settings(
+    db: AsyncSession,
+    shop_id: uuid.UUID | str,
+) -> dict:
+    """
+    Recupera las configuraciones operativas generales del taller.
+    """
+    stmt = select(Shop).where(Shop.id == shop_id)
+    result = await db.execute(stmt)
+    shop = result.scalar_one_or_none()
+    if shop is None:
+        raise ValueError(f"Taller {shop_id} no encontrado.")
+
+    return {
+        "allow_technician_intake": bool(shop.allow_technician_intake),
+    }
+
+
+async def update_shop_settings(
+    db: AsyncSession,
+    shop_id: uuid.UUID | str,
+    allow_technician_intake: bool,
+) -> dict:
+    """
+    Actualiza las configuraciones operativas generales del taller.
+    """
+    stmt = select(Shop).where(Shop.id == shop_id)
+    result = await db.execute(stmt)
+    shop = result.scalar_one_or_none()
+    if shop is None:
+        raise ValueError(f"Taller {shop_id} no encontrado.")
+
+    shop.allow_technician_intake = bool(allow_technician_intake)
+    db.add(shop)
+    await db.flush()
+
+    return {
+        "allow_technician_intake": shop.allow_technician_intake,
+    }
+
+
+

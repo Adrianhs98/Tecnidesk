@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from app.models.shop import Shop
 from app.models.technician import Technician
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.ticket_item import TicketItem
@@ -457,6 +458,10 @@ async def get_technician_me(
 
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
 
+    shop_allow_intake = await db.scalar(
+        select(Shop.allow_technician_intake).where(Shop.id == shop_id)
+    )
+
     return TechnicianMeResponse(
         id=tech.id,
         user_id=tech.user_id,
@@ -467,4 +472,5 @@ async def get_technician_me(
         inferred_specialties=inferred,
         active_tickets_count=active_count,
         completed_tickets_count=completed_count,
+        allow_technician_intake=bool(shop_allow_intake),
     )

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Sliders, RotateCcw, AlertTriangle, Check, Clock } from "lucide-react";
-import { fetchSlaConfig, updateSlaConfig } from "../../../api/shop";
+import { fetchSlaConfig, updateSlaConfig, fetchShopSettings, updateShopSettings } from "../../../api/shop";
 
 const SLA_STATUS_FIELDS = [
   {
@@ -32,11 +32,17 @@ export default function SlaSettingsModal({ onClose }) {
     queryFn: fetchSlaConfig,
   });
 
+  const { data: settingsData } = useQuery({
+    queryKey: ["shopSettings"],
+    queryFn: fetchShopSettings,
+  });
+
   const [thresholds, setThresholds] = useState({
     EN_ESPERA_INGRESO: 48,
     EN_REVISION: 24,
     EN_REPARACION: 48,
   });
+  const [allowTechnicianIntake, setAllowTechnicianIntake] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState(null);
 
@@ -49,6 +55,12 @@ export default function SlaSettingsModal({ onClose }) {
       });
     }
   }, [configData]);
+
+  useEffect(() => {
+    if (settingsData && typeof settingsData.allow_technician_intake === "boolean") {
+      setAllowTechnicianIntake(settingsData.allow_technician_intake);
+    }
+  }, [settingsData]);
 
   // Modal keyboard accessibility
   const handleKeyDown = useCallback(
@@ -116,6 +128,14 @@ export default function SlaSettingsModal({ onClose }) {
     }
 
     mutation.mutate(parsedPayload);
+    if (typeof updateShopSettings === "function") {
+      updateShopSettings({ allow_technician_intake: allowTechnicianIntake })
+        .then((data) => {
+          queryClient.setQueryData(["shopSettings"], data);
+          queryClient.invalidateQueries({ queryKey: ["technicianProfile"] });
+        })
+        .catch((err) => console.error("Error updating shop settings:", err));
+    }
   };
 
   const handleResetDefaults = () => {
@@ -236,6 +256,67 @@ export default function SlaSettingsModal({ onClose }) {
                   <Clock size={11} /> Vencido
                 </span>{" "}
                 y tendrán prioridad de atención en el tablero y workbench.
+              </div>
+
+              {/* Sección Permisos Operativos: Ingreso por Técnicos */}
+              <div
+                style={{
+                  background: "var(--surface2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "12px",
+                  padding: "16px",
+                }}
+                data-testid="technician-intake-setting-section"
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <label
+                      htmlFor="toggle-tech-intake"
+                      style={{ fontSize: "14px", fontWeight: "600", color: "var(--text1)", display: "block", cursor: "pointer" }}
+                    >
+                      Permitir que los técnicos ingresen equipos
+                    </label>
+                    <p style={{ fontSize: "12px", color: "var(--text3)", marginTop: "4px", lineHeight: "1.4", margin: 0 }}>
+                      Habilita la opción de recepción e ingreso de nuevos equipos directamente desde el panel operativo de técnicos.
+                    </p>
+                  </div>
+                  <label style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", flexShrink: 0, marginLeft: "16px" }}>
+                    <input
+                      id="toggle-tech-intake"
+                      type="checkbox"
+                      checked={allowTechnicianIntake}
+                      onChange={(e) => setAllowTechnicianIntake(e.target.checked)}
+                      data-testid="toggle-tech-intake"
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        cursor: "pointer",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: allowTechnicianIntake ? "var(--primary, #b89251)" : "#4a5568",
+                        borderRadius: "24px",
+                        transition: "background-color 0.2s",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          height: "18px",
+                          width: "18px",
+                          left: allowTechnicianIntake ? "22px" : "3px",
+                          bottom: "3px",
+                          backgroundColor: "white",
+                          borderRadius: "50%",
+                          transition: "left 0.2s",
+                        }}
+                      />
+                    </span>
+                  </label>
+                </div>
               </div>
 
               {SLA_STATUS_FIELDS.map(({ key, label, description, defaultHours }) => {

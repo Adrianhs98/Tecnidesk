@@ -3,6 +3,7 @@ import { Store } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import TicketSuccessModal from "../components/shared/TicketSuccessModal";
 import { API_BASE } from "../api/config";
+import { isValidWhatsAppNumber, normalizeWhatsAppNumber } from "../utils/phone";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function RegisterPage() {
   const isValid = 
     form.shop_name.trim().length >= 2 && 
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
-    form.contact_whatsapp.trim().length >= 10;
+    isValidWhatsAppNumber(form.contact_whatsapp);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,7 +39,7 @@ export default function RegisterPage() {
         body: JSON.stringify({ 
           shop_name: form.shop_name.trim(), 
           email: form.email.trim(),
-          contact_whatsapp: form.contact_whatsapp.trim() 
+          contact_whatsapp: normalizeWhatsAppNumber(form.contact_whatsapp) 
         }),
       });
 
@@ -102,7 +103,7 @@ export default function RegisterPage() {
           <div className="form-group" style={{ marginBottom: 28 }}>
             <label className="form-label">WhatsApp de Contacto <span style={{ color: "var(--accent)" }}>*</span></label>
             <input className="form-input" name="contact_whatsapp" type="tel" placeholder="ej. 593991234567" value={form.contact_whatsapp} onChange={handleChange} />
-            <p className="form-hint">Formato internacional sin el símbolo +. Ejemplo: 593987654321</p>
+            <p className="form-hint">Formato celular: 09XXXXXXXX o internacional 5939XXXXXXXX</p>
           </div>
 
           <button className="btn-primary" type="submit" disabled={loading || !isValid}>

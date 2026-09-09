@@ -289,3 +289,40 @@ async def verify_ticket_technician_access(
             )
 
     return ticket
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dependency 6: verify_can_create_ticket
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def verify_can_create_ticket(
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Verifica que el usuario tenga permiso para crear una orden de reparación (ticket).
+
+    - Administrador (UserRoleEnum.admin): permitido siempre bajo suscripción activa.
+    - Técnico (UserRoleEnum.technician): permitido solo si su taller tiene allow_technician_intake == True.
+    - Otros roles: denegado con HTTP 403.
+    """
+    from app.models.user import UserRoleEnum
+    from app.models.shop import Shop
+
+    if current_user.role == UserRoleEnum.admin:
+        return current_user
+
+    if current_user.role == UserRoleEnum.technician:
+        shop = await db.get(Shop, current_user.shop_id)
+        if shop and shop.allow_technician_intake:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ingresar equipos en este taller.",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="No tienes permiso para ingresar equipos en este taller.",
+    )
+

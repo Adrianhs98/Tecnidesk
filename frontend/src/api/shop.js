@@ -33,3 +33,37 @@ export const updateSlaConfig = async (customThresholds) => {
   }
   return response.json();
 };
+
+/**
+ * Obtiene la configuración operativa general del taller autenticado.
+ * @returns {Promise<{ allow_technician_intake: boolean }>}
+ */
+export const fetchShopSettings = async () => {
+  const response = await authFetch(`${API_BASE}/shops/settings`);
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error al obtener configuración del taller");
+  }
+  return response.json();
+};
+
+export const getShopSettings = fetchShopSettings;
+
+/**
+ * Actualiza la configuración operativa del taller autenticado.
+ * @param {{ allow_technician_intake: boolean }} settings
+ * @returns {Promise<{ allow_technician_intake: boolean }>}
+ */
+export const updateShopSettings = async (settings) => {
+  const response = await authFetch(`${API_BASE}/shops/settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error al actualizar configuración del taller");
+  }
+  return response.json();
+};
+

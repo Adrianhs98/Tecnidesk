@@ -30,7 +30,10 @@ async def list_inventory(
     """Listar inventario del taller."""
     stmt = select(Inventory).where(Inventory.shop_id == current_user.shop_id)
     stmt = stmt.where(Inventory.is_active == True)
-        
+
+    search = search.strip() if search else None
+    sku = sku.strip() if sku else None
+
     if search:
         stmt = stmt.where(Inventory.item_name.ilike(f"%{search}%"))
         

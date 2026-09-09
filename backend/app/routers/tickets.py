@@ -11,7 +11,7 @@ import time
 import uuid
 import magic
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,13 +27,17 @@ from app.core.dependencies import (
     get_current_user,
     subscription_guard,
     superadmin_key_guard,
+    verify_can_create_ticket,
     verify_ticket_technician_access,
 )
 from app.core.rate_limit import get_user_rate_limit_key, limiter
 from app.database import get_db
-from app.models.ticket import TicketStatusEnum
+from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User
 from app.schemas.ticket import (
+    ApplyDiagnosticRequest,
+    CycleTimeAnalyticsResponse,
+    DraftDiagnosticResponse,
     TicketAssignIn,
     TicketCreate,
     TicketDetailResponse,
@@ -45,7 +49,6 @@ from app.schemas.ticket import (
     TicketStatsResponse,
     TicketStatusUpdateIn,
     TicketUpdate,
-    CycleTimeAnalyticsResponse,
 )
 from app.services import ticket_service
 from app.services.ticket_service import (
@@ -73,7 +76,7 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 async def create_ticket(
     data: TicketCreate,
     response: Response,
-    current_user: User = Depends(subscription_guard),
+    current_user: User = Depends(verify_can_create_ticket),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -81,6 +84,7 @@ async def create_ticket(
             db=db,
             shop_id=current_user.shop_id,
             data=data,
+            created_by_user_id=current_user.id,
         )
         if warning:
             response.headers["X-Assignment-Warning"] = warning
@@ -809,3 +813,53 @@ async def update_ticket(
         )
     except TicketNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 15. POST /tickets/{ticket_id}/generate-diagnostic
+# ═════════════════════════════════════════════════════════════════════════════
+@router.post(
+    "/{ticket_id}/generate-diagnostic",
+    response_model=DraftDiagnosticResponse,
+    summary="Generar borrador de diagnóstico con Ohm",
+    description="Sintetiza la conversación técnica con Ohm en un diagnóstico para el cliente final.",
+)
+async def generate_diagnostic(
+    ticket_id: uuid.UUID,
+    ticket: Ticket = Depends(verify_ticket_technician_access),
+    db: AsyncSession = Depends(get_db),
+):
+    if ticket.status not in (TicketStatusEnum.EN_REPARACION, TicketStatusEnum.LISTO_PARA_RETIRAR):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La generación de diagnóstico solo está permitida en reparación o listo para entrega (estado actual: {ticket.status.value}).",
+        )
+    if ticket.draft_diagnostic is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya se generó un diagnóstico para este ticket.",
+        )
+
+    text = await CorrectionService.generate_final_diagnostic(db=db, ticket=ticket)
+    return DraftDiagnosticResponse(draft_diagnostic=text)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 16. POST /tickets/{ticket_id}/apply-diagnostic
+# ═════════════════════════════════════════════════════════════════════════════
+@router.post(
+    "/{ticket_id}/apply-diagnostic",
+    response_model=TicketResponse,
+    summary="Aplicar diagnóstico generado al ticket",
+    description="Copia el borrador generado (con edición manual opcional) a diagnostic_notes del ticket.",
+)
+async def apply_diagnostic(
+    ticket_id: uuid.UUID,
+    payload: ApplyDiagnosticRequest = Body(default_factory=ApplyDiagnosticRequest),
+    ticket: Ticket = Depends(verify_ticket_technician_access),
+    db: AsyncSession = Depends(get_db),
+):
+    updated = await CorrectionService.apply_final_diagnostic(
+        db=db, ticket=ticket, edited_diagnostic=payload.edited_diagnostic
+    )
+    return updated

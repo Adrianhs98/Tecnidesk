@@ -1,4 +1,4 @@
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, Suspense, lazy } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Wrench,
@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Filter,
+  Plus,
 } from "lucide-react";
 import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
@@ -24,6 +25,8 @@ import TechnicianTicketCard from "./TechnicianTicketCard";
 import TechnicianWorkModal from "./TechnicianWorkModal";
 import AiChatBubble from "./AiChatBubble";
 import AiChatDrawer from "./AiChatDrawer";
+
+const NewTicketModal = lazy(() => import("../admin/components/NewTicketModal"));
 
 // 3-Column Kanban Board setup for Technician Workflow
 const TECH_KANBAN_COLUMNS = [
@@ -86,6 +89,7 @@ export default function TechnicianDashboard() {
   const [selectedTicketForAi, setSelectedTicketForAi] = useState(null);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [takingTicketId, setTakingTicketId] = useState(null);
+  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
 
   // 1. Fetch Technician Profile
   const { data: meData } = useQuery({
@@ -386,6 +390,19 @@ export default function TechnicianDashboard() {
             </form>
 
             <div className="tech-filter-group">
+              {meData?.allow_technician_intake && !isReadOnly && (
+                <button
+                  type="button"
+                  className="btn-primary tech-new-ticket-btn"
+                  onClick={() => setShowNewTicketModal(true)}
+                  data-testid="tech-new-ticket-btn"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}
+                >
+                  <Plus size={16} />
+                  <span>Ingresar Equipo</span>
+                </button>
+              )}
+
               <select
                 className="form-input tech-status-select"
                 value={statusFilter}
@@ -528,6 +545,20 @@ export default function TechnicianDashboard() {
           onClearTicketContext={() => setSelectedTicketForAi(null)}
           onApplyToDiagnosis={handleApplyAiAdvice}
         />
+      )}
+
+      {/* Technician Ticket Intake Modal */}
+      {showNewTicketModal && (
+        <Suspense fallback={null}>
+          <NewTicketModal
+            onClose={() => setShowNewTicketModal(false)}
+            onCreated={() => {
+              setShowNewTicketModal(false);
+              refetchTickets();
+              queryClient.invalidateQueries({ queryKey: ["technicianTickets"] });
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Technician Agile Work Modal */}

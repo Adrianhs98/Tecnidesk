@@ -19,12 +19,16 @@ from app.schemas.shop import (
     ShopCreate,
     ShopOnboardingResponse,
     ShopResponse,
+    ShopSettingsResponse,
+    ShopSettingsUpdate,
     SlaConfigResponse,
     SlaConfigUpdate,
 )
 from app.services.shop_service import (
     create_shop,
+    get_shop_settings,
     get_shop_sla_config,
+    update_shop_settings,
     update_shop_sla_config,
 )
 
@@ -124,5 +128,63 @@ async def update_shop_sla_config_endpoint(
         ) from exc
 
     return SlaConfigResponse(**config)
+
+
+@router.get(
+    "/settings",
+    response_model=ShopSettingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener configuración operativa del taller",
+    description="Retorna la configuración operativa del taller (ej. allow_technician_intake).",
+)
+async def get_shop_settings_endpoint(
+    current_user: User = Depends(subscription_guard),
+    db: AsyncSession = Depends(get_db),
+) -> ShopSettingsResponse:
+    """
+    GET /shops/settings
+    Requiere usuario activo del taller y suscripción activa.
+    """
+    try:
+        settings = await get_shop_settings(db, current_user.shop_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return ShopSettingsResponse(**settings)
+
+
+@router.patch(
+    "/settings",
+    response_model=ShopSettingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Actualizar configuración operativa del taller",
+    description="Actualiza la configuración operativa del taller autenticado.",
+)
+async def update_shop_settings_endpoint(
+    payload: ShopSettingsUpdate,
+    current_user: User = Depends(admin_guard),
+    db: AsyncSession = Depends(get_db),
+) -> ShopSettingsResponse:
+    """
+    PATCH /shops/settings
+    Requiere rol de administrador y suscripción activa.
+    """
+    try:
+        settings = await update_shop_settings(
+            db,
+            current_user.shop_id,
+            payload.allow_technician_intake,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return ShopSettingsResponse(**settings)
+
 
 

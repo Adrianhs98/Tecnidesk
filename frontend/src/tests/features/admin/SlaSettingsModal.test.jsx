@@ -8,6 +8,8 @@ import * as shopApi from '../../../api/shop';
 vi.mock('../../../api/shop', () => ({
   fetchSlaConfig: vi.fn(),
   updateSlaConfig: vi.fn(),
+  fetchShopSettings: vi.fn(),
+  updateShopSettings: vi.fn(),
 }));
 
 describe('SlaSettingsModal Component', () => {
@@ -50,6 +52,14 @@ describe('SlaSettingsModal Component', () => {
         EN_REVISION: 24,
         EN_REPARACION: 48,
       },
+    });
+
+    vi.mocked(shopApi.fetchShopSettings).mockResolvedValue({
+      allow_technician_intake: false,
+    });
+
+    vi.mocked(shopApi.updateShopSettings).mockResolvedValue({
+      allow_technician_intake: true,
     });
   });
 
@@ -157,5 +167,25 @@ describe('SlaSettingsModal Component', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(mockOnClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders technician intake toggle and updates setting on submit', async () => {
+    renderModal();
+
+    const toggle = await screen.findByTestId('toggle-tech-intake');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+
+    const submitBtn = screen.getByRole('button', { name: /Guardar Cambios/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(shopApi.updateShopSettings).toHaveBeenCalledWith({
+        allow_technician_intake: true,
+      });
+    });
   });
 });

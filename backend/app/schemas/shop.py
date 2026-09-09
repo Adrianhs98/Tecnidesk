@@ -160,3 +160,23 @@ class SlaConfigResponse(BaseModel):
         description="Umbrales por defecto del sistema",
     )
 
+
+class ShopSettingsUpdate(BaseModel):
+    """Schema para actualizar la configuración operativa del taller."""
+    allow_technician_intake: bool = Field(
+        ...,
+        description="Indica si los técnicos tienen permiso para ingresar equipos en el taller.",
+        examples=[True, False],
+    )
+
+
+class ShopSettingsResponse(BaseModel):
+    """Schema de respuesta con la configuración operativa del taller."""
+    allow_technician_intake: bool = Field(
+        ...,
+        description="Indica si los técnicos tienen permiso para ingresar equipos en el taller.",
+    )
+
+    model_config = {"from_attributes": True}
+
+

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo, Suspense, lazy, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Info, Users, List, LayoutGrid, Sliders, BarChart3 } from "lucide-react";
+import { Info, Users, List, LayoutGrid, Sliders, BarChart3, Search, Plus, RotateCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
@@ -8,6 +8,8 @@ import { fetchSlaConfig } from "../../api/shop";
 import AdminTicketCard from "./components/AdminTicketCard";
 import KanbanBoard from "./components/KanbanBoard";
 import ThemeToggle from "../../components/shared/ThemeToggle";
+import AiChatBubble from "../technician/AiChatBubble";
+import AiChatDrawer from "../technician/AiChatDrawer";
 
 const TicketSuccessModal = lazy(() => import("../../components/shared/TicketSuccessModal"));
 const NewTicketModal = lazy(() => import("./components/NewTicketModal"));
@@ -29,6 +31,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [kpiFilter, setKpiFilter] = useState(null); // null | 'activos' | 'listos' | 'espera'
+  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
 
   const { data, isLoading: loading, isError, error: queryError, refetch: fetchData } = useQuery({
     queryKey: ['dashboardData', page, limit, searchQuery, dateFilter, kpiFilter],
@@ -222,9 +225,6 @@ export default function AdminDashboard() {
             📦 Inventario
           </button>
           <ThemeToggle />
-          <button className="btn-new-ticket" onClick={() => setShowModal(true)}>
-            Ingresar Equipo
-          </button>
           <button className="btn-danger" onClick={handleLogout}>
             Cerrar Sesion
           </button>
@@ -276,18 +276,58 @@ export default function AdminDashboard() {
 
         <div className="workbench-toolbar">
           <div className="workbench-toolbar-search">
-            <input 
-              className="form-input search-input" 
-              type="text" 
-              placeholder="Buscar por nombre, marca o codigo..." 
-              value={searchInput} 
-              onChange={(e) => {
-                setSearchInput(e.target.value);
-                startTransition(() => setSearchQuery(e.target.value));
-              }} 
-            />
+            <div className="search-input-wrapper">
+              <Search size={15} className="search-icon" />
+              <input 
+                className="form-input search-input" 
+                type="text" 
+                placeholder="Buscar por cliente, marca, modelo o código..." 
+                value={searchInput} 
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  startTransition(() => setSearchQuery(e.target.value));
+                }} 
+              />
+            </div>
           </div>
           <div className="workbench-toolbar-filters">
+            <input 
+              type="date" 
+              className="form-input toolbar-date-input" 
+              value={exactDate} 
+              onChange={(e) => {
+                const val = e.target.value;
+                startTransition(() => {
+                  setExactDate(val);
+                  setDateFilter(val ? `${val},${val}` : "");
+                  setPage(0);
+                });
+              }} 
+              title="Filtrar por día exacto" 
+            />
+            {exactDate && (
+              <button 
+                className="btn-secondary toolbar-clear-date" 
+                onClick={() => startTransition(() => {
+                  setExactDate("");
+                  setDateFilter("");
+                  setPage(0);
+                })} 
+                title="Limpiar fecha exacta"
+              >
+                Limpiar fecha
+              </button>
+            )}
+            <button 
+              className="btn-secondary toolbar-refresh-btn" 
+              onClick={fetchData} 
+              disabled={loading}
+              title="Actualizar datos"
+            >
+              <RotateCw size={14} className={loading ? "animate-spin" : ""} />
+              <span>Actualizar</span>
+            </button>
+
             <div className="view-mode-toggle" role="group" aria-label="Modo de vista">
               <button
                 type="button"
@@ -307,43 +347,17 @@ export default function AdminDashboard() {
                 title="Vista Tablero Kanban"
               >
                 <LayoutGrid size={14} />
-                <span>Tablero</span>
+                <span>Kanban</span>
               </button>
             </div>
 
-            <input 
-              type="date" 
-              className="form-input" 
-              value={exactDate} 
-              onChange={(e) => {
-                const val = e.target.value;
-                startTransition(() => {
-                  setExactDate(val);
-                  setDateFilter(val ? `${val},${val}` : "");
-                  setPage(0);
-                });
-              }} 
-              title="Filtrar por dia exacto" 
-            />
-            {exactDate && (
-              <button 
-                className="btn-secondary" 
-                onClick={() => startTransition(() => {
-                  setExactDate("");
-                  setDateFilter("");
-                  setPage(0);
-                })} 
-                title="Limpiar fecha exacta"
-              >
-                Limpiar fecha
-              </button>
-            )}
             <button 
-              className="btn-secondary" 
-              onClick={fetchData} 
-              disabled={loading}
+              className="btn-new-ticket toolbar-cta-btn" 
+              onClick={() => setShowModal(true)}
+              title="Registrar nuevo equipo"
             >
-              Actualizar
+              <Plus size={16} />
+              <span>+ Nuevo equipo</span>
             </button>
           </div>
         </div>
@@ -493,6 +507,20 @@ export default function AdminDashboard() {
         {showTechnicians && <TechniciansModal onClose={() => setShowTechnicians(false)} />}
         {createdTicket && <TicketSuccessModal ticket={createdTicket} onClose={() => setCreatedTicket(null)} />}
       </Suspense>
+
+      {/* Floating Ohm Admin Copilot Bubble */}
+      <AiChatBubble
+        onClick={() => setIsAiDrawerOpen((prev) => !prev)}
+        isOpen={isAiDrawerOpen}
+        activeTicketContext={null}
+      />
+
+      {/* Slide-over Ohm Admin Assistant Drawer */}
+      <AiChatDrawer
+        isOpen={isAiDrawerOpen}
+        onClose={() => setIsAiDrawerOpen(false)}
+        context="admin"
+      />
     </div>
   );
 }

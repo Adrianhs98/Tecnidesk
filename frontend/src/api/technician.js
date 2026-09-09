@@ -45,3 +45,39 @@ export const revealTicketPin = async (ticketId) => {
   }
   return response.json();
 };
+
+/**
+ * Generates customer-facing draft diagnostic synthesizing Ohm chat transcript.
+ * @param {string} ticketId
+ * @returns {Promise<{ draft_diagnostic: string }>}
+ */
+export const generateDraftDiagnostic = async (ticketId) => {
+  const response = await authFetch(`${API_BASE}/tickets/${ticketId}/generate-diagnostic`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error al generar diagnóstico con Ohm");
+  }
+  return response.json();
+};
+
+/**
+ * Applies draft diagnostic to ticket and public tracking portal.
+ * @param {string} ticketId
+ * @param {string|null} editedDiagnostic
+ * @returns {Promise<Object>}
+ */
+export const applyDraftDiagnostic = async (ticketId, editedDiagnostic = null) => {
+  const response = await authFetch(`${API_BASE}/tickets/${ticketId}/apply-diagnostic`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ edited_diagnostic: editedDiagnostic }),
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error al aplicar diagnóstico a la orden");
+  }
+  return response.json();
+};
+

@@ -51,27 +51,34 @@ La aplicación estará disponible en `http://localhost:5173`.
 ## 📦 Características Principales & Módulos
 
 ### 🛠️ Workbench Operativo del Taller (Fases 1 a 5)
-- **Alternador de Vista Lista / Tablero Kanban:** Selector interactivo en la barra de herramientas del `AdminDashboard.jsx` con persistencia de preferencia en `localStorage` (`tecnidesk_workbench_view`).
+- **Barra de Acciones Comercial & Productiva:** Toolbar refinada en `AdminDashboard.jsx` con búsqueda por cliente/dispositivo, selector de fecha con refresco rápido, alternador de vistas (Lista y Tablero Kanban) y botón de acción principal prioritario `+ Nuevo equipo`.
 - **Tablero Kanban Interactivo:** Organizado en 5 columnas de flujo operativo (*Ingreso / Recepción*, *En Revisión & Diagnóstico*, *Presupuesto & Espera*, *En Reparación*, *Listo para Retirar*) con tarjetas de alta densidad, badges de técnico y alertas visuales de SLA vencido en rojo.
 - **Smart Action CTA:** Botón contextual prioritario (*Asignar* → *Diagnosticar* → *WhatsApp* → *Ver detalle*) para guiar ágilmente al personal del taller.
+- **Componente Unificado `<StatusBadge />`:** Estandarización visual de estados en tarjetas y modales conforme a `DESIGN.md`, con soporte de variantes de tamaño y fallback tolerante a fallos.
 - **Guardias Técnicas en UI:** Intercepción y feedback visual en cambios de estado para garantizar que no se avance a `EN_REPARACION` sin técnico responsable.
-- **Ajustes de SLAs Multi-Tenant (`SlaSettingsModal.jsx`):** Modal interactivo para configurar umbrales de SLA por estado en tiempo real con botón de restablecimiento a valores predeterminados.
+- **Ajustes de SLAs Multi-Tenant (`SlaSettingsModal.jsx`):** Modal interactivo para configurar umbrales de SLA por estado en tiempo real y habilitar la delegación de ingreso de equipos para técnicos (`allow_technician_intake`).
 - **Métricas de Tiempos de Ciclo (`CycleTimeAnalyticsModal.jsx`):** Visualización de Lead Time, Cycle Time activo, desglose por etapa en barras de progreso y detección gráfica del cuello de botella.
 
 ### 👨‍🔧 Portal de Técnico Dedicado (`/tech`)
-- **Mesa de Trabajo de Alta Densidad (`TechnicianDashboard.jsx`):** Pestañas "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic y selector de vista Lista vs Tablero Kanban de 3 columnas (*Por Diagnosticar*, *En Reparación / Repuesto*, *Listo para Entrega*).
+- **Mesa de Trabajo de Alta Densidad (`TechnicianDashboard.jsx`):** Pestañas "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic, botón opt-in "Ingresar Equipo" y selector de vista Lista vs Tablero Kanban de 3 columnas.
 - **Modo Supervisor para Administradores:** Los usuarios administradores que navegan a `/tech` entran en modo de solo lectura (sin mutaciones operativas ni emisión de PINs) para preservar la trazabilidad de auditoría.
-- **Ficha de Reparación Ágil (`TechnicianWorkModal.jsx`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos y evidencias fotográficas.
-- **Copiloto IA Técnico (`AiChatBubble.jsx` y `AiChatDrawer.jsx`):** Burbuja flotante permanente en `/tech` y drawer lateral conversacional potenciado por Gemini 3.7 Flash con soporte para consulta libre y diagnóstico contextualizado al ticket.
+- **Ficha de Reparación Ágil (`TechnicianWorkModal.jsx`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos, evidencias fotográficas y sección para generar/editar borradores de diagnósticos asistidos por Ohm.
+- **Copiloto IA Técnico (`AiChatBubble.jsx` y `AiChatDrawer.jsx`):** Burbuja flotante permanente en `/tech` y drawer lateral conversacional potenciado por Gemini 3.6 Flash con blindaje anti prompt-injection, consulta técnica libre y diagnóstico contextualizado al ticket.
+
+### 🤖 Asistente de Gestión Ohm para Administradores
+- **Copiloto Administrativo Integrado:** Burbuja flotante y drawer lateral (`AiChatBubble` y `AiChatDrawer`) adaptados con `context="admin"` en `AdminDashboard.jsx`.
+- **Chips de Acción Inmediata:** Atajos en un clic para *Ganancias de hoy*, *Equipos ingresados hoy* y *Equipos sin tocar (>48h)* con respuestas estructuradas sin persistencia innecesaria en base de datos.
 
 ### 🧠 Diagnóstico Asistido con IA (`DiagnosticAssistPanel.jsx`)
 - Panel de razonamiento explicable integrado en el modal de diagnóstico (`DiagnosticModal.jsx`).
 - Sugerencias generadas por IA con citaciones grounding, evaluación de confianza y selector rápido de repuestos comunes.
 - Interfaz interactiva de feedback y confirmación de aprendizaje RAG para enriquecer la base de conocimiento (`pgvector`).
 
-### 🔒 Privacidad y Enmascaramiento de PII
+### 🔒 Privacidad, Sanitización y Seguridad
 - Módulo `src/utils/privacy.js` (`maskPhone`, `maskEmail`, `maskTrackingCode`) para evitar *shoulder surfing* en mostrador.
+- Módulo `src/utils/phone.js` con validación estricta de teléfonos móviles ecuatorianos (`09XXXXXXXX` / `+5939XXXXXXXX`).
 - Enmascaramiento por defecto en tarjetas del panel y botón de revelado seguro (`Eye`/`EyeOff`) dentro de `AdminTicketCard.jsx` y `TechnicianWorkModal.jsx`.
+- Sanitización defensiva en formularios (Login, Registro, Tickets, Inventario y Técnicos) eliminando espacios espurios y rechazando entradas en blanco.
 
 ### 🎨 Arquitectura de Temas (Modo Claro & Modo Oscuro)
 - Paleta cálida ámbar construida sobre espacios de color **OKLCH** libre de gradientes sucios.
@@ -95,7 +102,7 @@ La aplicación estará disponible en `http://localhost:5173`.
 El frontend cuenta con una suite automatizada completa que valida componentes, modales, vistas Kanban, portal de técnico, copiloto IA, utilidades y hooks:
 
 ```bash
-# Ejecutar todas las pruebas (97 tests pasando al 100%)
+# Ejecutar todas las pruebas (149 tests pasando al 100% en 20 suites)
 npm test
 
 # Ejecutar pruebas con reporte de cobertura

@@ -16,7 +16,8 @@ export default function LoginPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.username.trim() || !form.password.trim()) {
+    const email = form.username.trim().toLowerCase();
+    if (!email || !form.password.trim()) {
       setError("Por favor completa todos los campos.");
       return;
     }
@@ -28,7 +29,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.username, password: form.password }),
+        body: JSON.stringify({ email, password: form.password }),
       });
 
       if (!res.ok) throw new Error("Credenciales incorrectas");

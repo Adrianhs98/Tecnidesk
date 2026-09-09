@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class InventoryCreate(BaseModel):
@@ -12,12 +12,30 @@ class InventoryCreate(BaseModel):
     selling_price: Decimal = Field(..., ge=0)
     low_stock_alert: int = Field(default=3, ge=0)
 
+    @field_validator("item_name")
+    @classmethod
+    def sanitize_item_name(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 2:
+            raise ValueError("item_name must contain at least 2 non-whitespace characters")
+        return cleaned
+
 
 class InventoryUpdate(BaseModel):
     item_name: str | None = Field(default=None, min_length=2, max_length=300)
     cost_price: Decimal | None = Field(default=None, ge=0)
     selling_price: Decimal | None = Field(default=None, ge=0)
     low_stock_alert: int | None = Field(default=None, ge=0)
+
+    @field_validator("item_name")
+    @classmethod
+    def sanitize_item_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        if len(cleaned) < 2:
+            raise ValueError("item_name must contain at least 2 non-whitespace characters")
+        return cleaned
 
 
 class InventoryRestock(BaseModel):

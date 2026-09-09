@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, computed_field, EmailStr, model_validator
+from pydantic import BaseModel, Field, computed_field, EmailStr, model_validator, field_validator
 
 from app.models.ticket import TicketStatusEnum
 from app.models.ticket_item import ItemTypeEnum
@@ -136,6 +136,38 @@ class TicketCreate(BaseModel):
         description="UUID del técnico. Requerido si assignment_mode == 'manual'"
     )
 
+    @field_validator("device_brand")
+    @classmethod
+    def sanitize_device_brand(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 2:
+            raise ValueError("device_brand must contain at least 2 non-whitespace characters")
+        return cleaned
+
+    @field_validator("device_model")
+    @classmethod
+    def sanitize_device_model(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 2:
+            raise ValueError("device_model must contain at least 2 non-whitespace characters")
+        return cleaned
+
+    @field_validator("issue_description")
+    @classmethod
+    def sanitize_issue_description(cls, v: str) -> str:
+        cleaned = v.strip()
+        if len(cleaned) < 5:
+            raise ValueError("issue_description must contain at least 5 non-whitespace characters")
+        return cleaned
+
+    @field_validator("client_name", "client_phone", "internal_notes")
+    @classmethod
+    def sanitize_optional_fields(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        return cleaned if cleaned else None
+
     @model_validator(mode="after")
     def validate_assignment(self):
         if self.assignment_mode == "manual" and self.technician_id is None:
@@ -191,6 +223,8 @@ class TicketResponse(BaseModel):
     issue_description: str
     internal_notes: str | None
     diagnostic_notes: str | None
+    draft_diagnostic: str | None = None
+    diagnostic_applied_at: datetime | None = None
     requires_approval: bool
 
     status: TicketStatusEnum
@@ -301,5 +335,28 @@ class CycleTimeAnalyticsResponse(BaseModel):
     active_tickets_count: int
     stage_durations: list[StageDurationMetric]
     time_window_days: int
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Ohm Controlled Diagnostic Flow Schemas
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DraftDiagnosticResponse(BaseModel):
+    """Respuesta con el borrador de diagnóstico generado por Ohm."""
+    draft_diagnostic: str
+
+
+class ApplyDiagnosticRequest(BaseModel):
+    """Payload para aplicar un borrador con edición manual opcional."""
+    edited_diagnostic: str | None = None
+
+    @field_validator("edited_diagnostic", mode="before")
+    @classmethod
+    def sanitize_edited_diagnostic(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = str(v).strip()
+        return stripped if stripped else None
+
 
 

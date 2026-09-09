@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { authFetch } from "../../api/authFetch";
 import { API_BASE } from "../../api/config";
-import { revealTicketPin } from "../../api/technician";
+import { revealTicketPin, generateDraftDiagnostic, applyDraftDiagnostic } from "../../api/technician";
 import { maskPhone } from "../../utils/privacy";
 import PartsSelector from "../admin/components/PartsSelector";
 
@@ -51,6 +51,13 @@ export default function TechnicianWorkModal({
   const [diagnosticNotes, setDiagnosticNotes] = useState(ticket?.diagnostic_notes || "");
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSuccess, setNotesSuccess] = useState(false);
+
+  const [draftDiagnostic, setDraftDiagnostic] = useState(ticket?.draft_diagnostic || "");
+  const [generatingDiagnostic, setGeneratingDiagnostic] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState(null);
+  const [applyingDiagnostic, setApplyingDiagnostic] = useState(false);
+  const [diagnosticAppliedSuccess, setDiagnosticAppliedSuccess] = useState(false);
+  const [diagnosticAppliedAt, setDiagnosticAppliedAt] = useState(ticket?.diagnostic_applied_at || null);
 
   const [evidences, setEvidences] = useState([]);
   const [loadingEvidences, setLoadingEvidences] = useState(false);
@@ -186,6 +193,49 @@ export default function TechnicianWorkModal({
       alert(err.message);
     } finally {
       setSavingNotes(false);
+    }
+  };
+
+  const isEligibleForGeneration = ["EN_REPARACION", "LISTO_PARA_RETIRAR"].includes(currentStatus || ticket?.status);
+  const hasDraft = Boolean(draftDiagnostic && draftDiagnostic.trim().length > 0);
+
+  // Generate customer-facing draft with Ohm
+  const handleGenerateDiagnostic = async () => {
+    if (generatingDiagnostic || isReadOnly) return;
+    setGeneratingDiagnostic(true);
+    setDiagnosticError(null);
+    try {
+      const res = await generateDraftDiagnostic(ticket.id);
+      setDraftDiagnostic(res.draft_diagnostic);
+      if (onStatusChange) {
+        onStatusChange({ ...ticket, draft_diagnostic: res.draft_diagnostic });
+      }
+    } catch (err) {
+      setDiagnosticError(err.message || "Error al generar diagnóstico con Ohm");
+    } finally {
+      setGeneratingDiagnostic(false);
+    }
+  };
+
+  // Apply draft diagnostic to ticket and tracking portal
+  const handleApplyDraft = async () => {
+    if (applyingDiagnostic || isReadOnly || !draftDiagnostic.trim()) return;
+    setApplyingDiagnostic(true);
+    setDiagnosticError(null);
+    try {
+      const updated = await applyDraftDiagnostic(ticket.id, draftDiagnostic);
+      setDiagnosticNotes(draftDiagnostic);
+      const appliedAt = updated.diagnostic_applied_at || new Date().toISOString();
+      setDiagnosticAppliedAt(appliedAt);
+      setDiagnosticAppliedSuccess(true);
+      if (onStatusChange) {
+        onStatusChange(updated);
+      }
+      setTimeout(() => setDiagnosticAppliedSuccess(false), 3000);
+    } catch (err) {
+      setDiagnosticError(err.message || "Error al aplicar diagnóstico a la orden");
+    } finally {
+      setApplyingDiagnostic(false);
     }
   };
 
@@ -394,28 +444,65 @@ export default function TechnicianWorkModal({
           </div>
 
           {/* Diagnostic & Technical Notes */}
-          <section className="tech-section">
+          <section className="tech-section" data-testid="diagnostic-section">
             <div className="tech-section-header-row">
               <label className="tech-section-label">
                 <FileText size={15} />
                 <span>Diagnóstico y Notas Técnicas</span>
               </label>
               {!isReadOnly && (
-                <button
-                  type="button"
-                  className="btn-secondary tech-save-notes-btn"
-                  onClick={handleSaveNotes}
-                  disabled={savingNotes}
-                  data-testid="save-notes-btn"
-                >
-                  <Save size={14} />
-                  <span>{savingNotes ? "Guardando..." : "Guardar Notas"}</span>
-                </button>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleGenerateDiagnostic}
+                    disabled={generatingDiagnostic || hasDraft || !isEligibleForGeneration}
+                    title={
+                      hasDraft
+                        ? "Diagnóstico ya generado para esta orden"
+                        : !isEligibleForGeneration
+                        ? "Disponible solo en reparación o listo para retirar"
+                        : "Generar borrador de diagnóstico con Ohm a partir del chat técnico"
+                    }
+                    data-testid="generate-diagnostic-btn"
+                    style={{ fontSize: "12px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <Sparkles size={14} />
+                    <span>{generatingDiagnostic ? "Sintetizando..." : "Generar con Ohm"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary tech-save-notes-btn"
+                    onClick={handleSaveNotes}
+                    disabled={savingNotes}
+                    data-testid="save-notes-btn"
+                  >
+                    <Save size={14} />
+                    <span>{savingNotes ? "Guardando..." : "Guardar Notas"}</span>
+                  </button>
+                </div>
               )}
             </div>
-            {notesSuccess && (
-              <div className="tech-success-banner">✓ Notas técnicas actualizadas</div>
+
+            {diagnosticError && (
+              <div className="tech-pin-error" data-testid="diagnostic-error-banner" style={{ marginBottom: "10px" }}>
+                {diagnosticError}
+              </div>
             )}
+            {notesSuccess && (
+              <div className="tech-success-banner" style={{ marginBottom: "10px" }}>✓ Notas técnicas actualizadas</div>
+            )}
+            {diagnosticAppliedSuccess && (
+              <div className="tech-success-banner" data-testid="diagnostic-applied-banner" style={{ marginBottom: "10px" }}>
+                ✓ Diagnóstico aplicado exitosamente a la orden y portal de tracking
+              </div>
+            )}
+            {diagnosticAppliedAt && (
+              <div className="tech-diagnostic-audit-info" style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "8px" }}>
+                Publicado al cliente el {new Date(diagnosticAppliedAt).toLocaleString()}
+              </div>
+            )}
+
             <textarea
               className="form-input tech-notes-textarea"
               rows={4}
@@ -426,6 +513,51 @@ export default function TechnicianWorkModal({
               readOnly={isReadOnly}
               data-testid="diagnostic-notes-input"
             />
+
+            {/* Review Area for Draft Diagnostic generated by Ohm */}
+            {hasDraft && (
+              <div
+                className="tech-draft-review-box"
+                data-testid="draft-diagnostic-section"
+                style={{
+                  marginTop: "12px",
+                  padding: "12px",
+                  border: "1px solid var(--accent, #b89251)",
+                  borderRadius: "8px",
+                  background: "rgba(184, 146, 81, 0.05)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: "600", fontSize: "13px", color: "var(--accent, #b89251)" }}>
+                    <Sparkles size={14} />
+                    <span>Borrador generado por Ohm (Editable antes de publicar)</span>
+                  </label>
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={handleApplyDraft}
+                      disabled={applyingDiagnostic || !draftDiagnostic.trim()}
+                      data-testid="apply-draft-diagnostic-btn"
+                      style={{ fontSize: "12px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    >
+                      <CheckCircle2 size={13} />
+                      <span>{applyingDiagnostic ? "Aplicando..." : "Aplicar Diagnóstico"}</span>
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  className="form-input tech-notes-textarea"
+                  rows={3}
+                  value={draftDiagnostic}
+                  onChange={(e) => setDraftDiagnostic(e.target.value)}
+                  placeholder="Borrador para el cliente generado por Ohm..."
+                  disabled={isReadOnly}
+                  readOnly={isReadOnly}
+                  data-testid="draft-diagnostic-input"
+                />
+              </div>
+            )}
           </section>
 
           {/* Parts & Inventory Selector */}

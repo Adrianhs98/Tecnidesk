@@ -11,18 +11,38 @@ The system MUST return a paginated list of inventory items, filterable by name a
 - THEN the system returns a paginated list of active inventory items for the shop
 
 ### Requirement: Create Inventory Item
-The system MUST persist a new item scoped to the shop.
+The system MUST persist a new item scoped to the shop, MUST strip leading and trailing whitespace from `item_name`, and MUST reject names with fewer than 2 non-whitespace characters.
 #### Scenario: Create successful
 - GIVEN an authenticated user and valid item data
 - WHEN the user creates an inventory item
 - THEN the system persists the item and returns the created record
 
+#### Scenario: Stripping leading and trailing whitespace on creation
+- GIVEN an inventory creation payload with `item_name = "  Batería iPhone 13  "`
+- WHEN the schema validation is applied
+- THEN the validation succeeds and `item_name` is saved as `"Batería iPhone 13"`
+
+#### Scenario: Rejection of whitespace-only item name on creation
+- GIVEN an inventory creation payload with `item_name = "   "`
+- WHEN the schema validation is applied
+- THEN the validation fails with a validation error
+
 ### Requirement: Update Inventory Item
-The system MUST apply partial updates and MUST return 404 if the item is not found in the shop.
+The system MUST apply partial updates, MUST strip leading and trailing whitespace from `item_name` if provided, MUST reject whitespace-only names, and MUST return 404 if the item is not found in the shop.
 #### Scenario: Update existing item
 - GIVEN an authenticated user and an existing item ID
 - WHEN the user updates the item with new fields
 - THEN the system applies the changes and returns the updated item
+
+#### Scenario: Stripping whitespace on update
+- GIVEN an inventory update payload with `item_name = "  Pin de Carga Type-C  "`
+- WHEN the schema validation is applied
+- THEN the validation succeeds and `item_name` is cleaned to `"Pin de Carga Type-C"`
+
+#### Scenario: Rejection of whitespace-only item name on update
+- GIVEN an inventory update payload with `item_name = "    "`
+- WHEN the schema validation is applied
+- THEN the validation fails with a validation error
 
 #### Scenario: Update non-existent item
 - GIVEN an authenticated user and a non-existent item ID

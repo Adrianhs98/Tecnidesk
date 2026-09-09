@@ -11,7 +11,7 @@ Este backend proporciona una API REST asíncrona, robusta y segura construida co
 - **Framework:** FastAPI (Python 3.12+)
 - **ORM & Persistencia:** SQLAlchemy 2.0 (Patrones asíncronos) + `asyncpg` sobre PostgreSQL
 - **Búsqueda Vectorial & RAG:** Extensión `pgvector` con índices HNSW (768 dimensiones)
-- **Modelos de IA:** Google Gemini 3.7 Flash (razonamiento explicable grounded) + Ollama (`nomic-embed-text-v2-moe`)
+- **Modelos de IA:** Google Gemini 3.6 Flash (razonamiento grounded) + Gemini 3.5 Flash Lite (pre-clasificación de seguridad y routing) + Ollama (`nomic-embed-text-v2-moe`)
 - **Migraciones:** Alembic
 - **Seguridad & Criptografía:** JWT (Access Tokens y Refresh Tokens con rotación estatal), Fernet (cifrado simétrico de PINs/contraseñas), Bcrypt (hashing de passwords)
 - **Validación & Configuración:** Pydantic v2 y Pydantic Settings
@@ -90,13 +90,27 @@ Cada taller opera estrictamente bajo su `shop_id`. Las dependencias (`get_curren
 
 ### 🧠 Diagnóstico Asistido con RAG Híbrido & Human-in-the-Loop
 - **Embeddings y Búsqueda Vectorial:** Integración de `pgvector` con índices HNSW sobre 768 dimensiones para recuperación semántica contextualizada por tienda.
-- **Razonamiento Grounded:** Servicio de explicación técnica asistido por Gemini 3.7 Flash con validación anti-alucinación.
+- **Razonamiento Grounded:** Servicio de explicación técnica asistido por Gemini 3.6 Flash con validación anti-alucinación.
 - **Corrección Interactiva y Aprendizaje:** Endpoint de feedback que permite al técnico ajustar diagnósticos y guardar casos reales validados (`real_validated`).
+- **Generación y Edición de Diagnósticos:** Endpoints `POST /tickets/{id}/generate-diagnostic` con gating estricto de estados (`EN_REPARACION`, `LISTO_PARA_RETIRAR`) y `POST /tickets/{id}/apply-diagnostic` con borrador editable (`ApplyDiagnosticRequest`).
+
+### 🛡️ Blindaje de Seguridad en IA (Scope Técnico & Anti Prompt-Injection)
+- **Pre-Clasificador Ultra-Rápido (`classify_message_safety`):** Evaluación en una sola llamada JSON con `gemini-3.5-flash-lite` de `on_topic` y `injection_attempt` antes de invocar modelos caros de razonamiento o RAG.
+- **Política Fail-Open Resiliente:** Degradación segura ante fallos transitorios de red para garantizar disponibilidad operativa al técnico.
+- **Respuesta Enlatada Idéntica:** Mitigación neutral sin dar pistas a atacantes sobre la detección.
+- **Defensa Sandwich:** Instrucciones anti-jailbreak iniciales y recordatorio de cierre pegado al mensaje del usuario.
+- **Auditoría Inmutable (`ai_security_events`):** Registro de incidentes de inyección con taller, técnico, ticket y fragmento acotado a 280 caracteres.
+
+### 🤖 Asistente de Gestión para Administradores
+- **Copiloto Administrativo (`POST /admin/assistant/query`):** Consultas conversacionales protegidas con `admin_guard`.
+- **Catálogo Cerrado de Intents:** `ganancias_del_dia`, `equipos_ingresados_hoy` y `equipos_sin_tocar`. Cero riesgo de SQL injection ni ejecución arbitraria.
+- **Arquitectura Stateless:** Consultas dinámicas sobre la base de datos sin persistencia innecesaria en tablas auxiliares.
 
 ### 📱 Gestión de Tickets & Cifrado de Dispositivos
 - **Cifrado Fernet:** Los PINs o patrones de desbloqueo se cifran simétricamente antes de persistirse y se desencriptan únicamente en la capa interna de servicios.
 - **Evidencias en R2:** Carga segura de evidencias fotográficas vinculadas a la orden.
 - **Rastreo Público:** Endpoint `/tracking/{token}` sin requerir sesión para consulta del cliente.
+- **Delegación de Ingreso a Técnicos:** Opción opt-in por tienda (`Shop.allow_technician_intake`) con dependencia `verify_can_create_ticket` para intake controlado.
 
 ### 👨‍🔧 Gestión de Técnicos & Portal Dedicado
 - **Perfil Seguro del Técnico (`GET /technicians/me`):** Whitelist estricto de campos operativos sin exponer datos financieros del taller.
@@ -112,7 +126,7 @@ Cada taller opera estrictamente bajo su `shop_id`. Las dependencias (`get_curren
 El backend cuenta con una suite automatizada con **pytest** y **respx** para mocks HTTP asíncronos:
 
 ```bash
-# Ejecutar toda la suite (130 tests pasando al 100%)
+# Ejecutar toda la suite (180+ tests pasando al 100%)
 pytest
 
 # Ejecutar suite con reporte de cobertura de código
@@ -135,15 +149,15 @@ backend/
 ├── app/
 │   ├── api/v1/           # Endpoints públicos (tracking)
 │   ├── core/             # Dependencias, JWT, guards de seguridad y rate limiters (SlowAPI)
-│   ├── models/           # Modelos ORM SQLAlchemy 2.0
-│   ├── routers/          # Controladores FastAPI (Auth, Tickets, Shops, Technicians, Diagnostic, etc.)
+│   ├── models/           # Modelos ORM SQLAlchemy 2.0 (Ticket, Shop, AiSecurityEvent, etc.)
+│   ├── routers/          # Controladores FastAPI (Auth, Tickets, Shops, Technicians, Diagnostic, AdminAssistant, etc.)
 │   ├── schemas/          # Modelos Pydantic v2 para validación I/O
-│   ├── services/         # Servicios de lógica de negocio (TicketService, EmbeddingService, etc.)
+│   ├── services/         # Servicios de lógica de negocio (TicketService, AiSafetyService, AdminAssistantService, etc.)
 │   ├── config.py         # Configuración centralizada vía Pydantic Settings
 │   ├── database.py       # Motor asíncrono y sesión SQLAlchemy
 │   └── main.py           # Aplicación FastAPI, configuración de CORS y middlewares
 ├── scripts/              # Seeds y scripts operativos (sync_technicians_users.py)
-├── tests/                # 130 pruebas unitarias y de integración (pytest)
+├── tests/                # 180+ pruebas unitarias y de integración (pytest)
 ├── requirements.txt      # Dependencias de Python
 └── alembic.ini           # Configuración de Alembic
 ```

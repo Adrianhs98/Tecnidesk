@@ -12,6 +12,8 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Alternador de Vistas (Lista & Kanban):** Visualización en lista tabular paginada o tablero interactivo Kanban organizado en 5 columnas operativas (*Ingreso / Recepción*, *En Revisión & Diagnóstico*, *Presupuesto & Espera*, *En Reparación*, *Listo para Retirar*) con persistencia de preferencia en `localStorage`.
 - **Ordenamiento SQL Inteligente:** Priorización en backend mediante `CASE` que ubica al inicio tickets sin técnico asignado, seguidos de aquellos con SLA vencido y finalmente por orden cronológico.
 - **Smart Action CTA:** Botón de acción rápida contextual (*Asignar* → *Diagnosticar* → *WhatsApp* → *Ver detalle*) para guiar al técnico hacia la acción prioritaria inmediata.
+- **Badges de Estado Unificados (`<StatusBadge />`):** Estandarización visual de estados en tarjetas y modales conforme a `DESIGN.md`, con tokens de color, fondo, borde e iconos contextuales compartidos entre Admin y Portal de Técnico.
+- **Señales SLA Visibles y Accesibles:** Alertas visuales perimetrales (`.is-stale`) y tooltips explicativos para tickets que exceden el tiempo máximo de atención en mostrador.
 - **Guardia Estricta de Asignación Técnica:** Validación estricta que prohíbe la transición a `EN_REPARACION` si el ticket no cuenta con un técnico asignado (`UnassignedTechnicianError` / HTTP 400).
 - **Auditoría Inmutable de Estados:** Registro síncrono en `ticket_status_history` de cada transición de estado con autor, timestamp y motivo.
 - **SLAs Dinámicos y Multi-Tenant:** Umbrales de SLA configurables por cada taller (`shops.sla_config`) con panel de ajustes en tiempo real y fallback automático a defaults del sistema.
@@ -23,6 +25,14 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Modo Supervisor de Solo Lectura:** Acceso de inspección para administradores en `/tech` que preserva la trazabilidad de auditoría deshabilitando mutaciones operativas.
 - **Ficha de Reparación Ágil (`TechnicianWorkModal`):** Desbloqueo seguro de PIN/patrón auditado con toggle `Eye`/`EyeOff`, transiciones de estado de 1 clic, vinculación de repuestos y evidencias fotográficas.
 - **Ohm (`AiChatBubble` & `AiChatDrawer`):** Burbuja flotante permanente y drawer lateral conversacional potenciado por Gemini 3.6 Flash con modo libre de taller (`POST /diagnostic/chat`) y modo contextualizado al ticket (`POST /tickets/{id}/diagnostic-chat`), botón para volcar diagnósticos y confirmación de aprendizaje RAG.
+- **Generación y Edición de Diagnósticos con Ohm:** Creación asistida de diagnósticos técnicos (`POST /tickets/{id}/generate-diagnostic`) con gating de estado (`EN_REPARACION`, `LISTO_PARA_RETIRAR`), borrador editable antes de persistir (`ApplyDiagnosticRequest`) y protección contra regeneración duplicada.
+- **Ingreso de Equipos por Técnicos (Delegación Configurable):** Opción opt-in por tienda (`Shop.allow_technician_intake`) administrable desde `SlaSettingsModal` (`PATCH /shops/settings`) que habilita el botón "Ingresar Equipo" en el dashboard técnico (`NewTicketModal`) bajo la guardia `verify_can_create_ticket` con auditoría de creación.
+
+### 🤖 Asistente de Gestión Ohm en Panel de Administrador
+- **Copiloto Administrativo para el Taller:** Burbuja flotante y panel deslizable (`AiChatBubble` y `AiChatDrawer`) adaptados con `context="admin"` en `AdminDashboard.jsx` (`POST /admin/assistant/query`).
+- **Atajos Rápidos en 1 Clic:** Chips rápidos para métricas clave de negocio: *Ganancias de hoy* (suma de ingresos de tickets listos para entrega), *Equipos ingresados hoy* (conteo diario de recepción) y *Equipos sin tocar* (alerta de equipos estancados por más de 48 horas sin cambio de estado).
+- **Catálogo Cerrado de Intents & Cero SQL Injection:** Clasificación estricta mediante coincidencia directa rápida o fallback con `gemini-3.5-flash-lite`, ejecutando consultas SQLAlchemy parametrizadas y emitiendo respuestas enlatadas con ayuda contextual ante consultas fuera del catálogo.
+- **Arquitectura Conversacional Stateless:** Operación ágil y ligera en memoria del componente frontend, sin requerir tablas de base de datos ni migraciones de persistencia.
 
 ### 🧠 Diagnóstico Asistido con IA (RAG Híbrido & Human-in-the-Loop)
 - **Búsqueda Vectorial HNSW:** Recuperación semántica sobre base de conocimiento y casos históricos con `pgvector` (índices HNSW de 768 dimensiones) y aislamiento multi-tenant.
@@ -35,11 +45,14 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Trazabilidad en Diagnósticos:** Descuento y restauración automática de existencias al vincular o desvincular repuestos a las órdenes de reparación.
 - **Validaciones Estrictas:** Reglas de negocio para componentes críticos (ej. displays con marca y modelo obligatorio).
 
-### 🔒 Privacidad, Seguridad y Enmascaramiento de PII
+### 🔒 Privacidad, Seguridad y Sanitización de Datos
+- **Blindaje de Ohm (Scope Técnico & Anti Prompt-Injection):** Pre-clasificación ligera en una sola llamada JSON con `gemini-3.5-flash-lite` para delimitar consultas estrictamente al dominio de reparación técnica y detectar intentos de jailbreak/inyección. Redirección neutral unificada (`CANNED_REDIRECT_RESPONSE`), técnica sandwich para robustecer el system prompt y registro inmutable de auditoría en `ai_security_events`.
 - **Enmascaramiento de PII:** Protección contra *shoulder surfing* en mostrador enmascarando teléfono (`maskPhone`), correo (`maskEmail`) y código de guía (`maskTrackingCode`).
 - **Revelado Seguro Bajo Demanda:** Botón interactivo con ícono de ojo (`Eye`/`EyeOff`) en el modal de detalles para técnicos autorizados.
+- **Validación Móvil Ecuatoriana:** Validador y normalizador centralizado (`utils/phone.js`) que verifica teléfonos en formato nacional (`09XXXXXXXX`) e internacional (`+5939XXXXXXXX`) para intake y generación fiable de enlaces click-to-chat de WhatsApp.
+- **Sanitización Defensiva Multi-Capa:** Validación estricta con Pydantic v2 en backend y guards client-side en formularios (Tickets, Inventario, Técnicos, Login y Registro) que recortan espacios residuales (*trimming*), rechazan entradas puras en blanco y convierten valores vacíos en `null`/`None`.
 - **Cifrado Simétrico Fernet:** Cifrado en base de datos de contraseñas y patrones de desbloqueo de los dispositivos (`pin_or_password`) con rate limiting y auditoría.
-- **Autenticación Robusta:** JWT con tokens de acceso de corta duración y refresh tokens estatales de un solo uso con rotación y revocación inmediata en logout.
+- **Autenticación Robusta:** JWT con tokens de acceso de corta duración, normalización de correos en minúsculas y refresh tokens estatales de un solo uso con rotación y revocación inmediata en logout.
 - **Control de Suscripción:** Middleware `subscription_guard` que restringe el acceso con `HTTP 402 Payment Required` ante suscripciones vencidas o suspendidas.
 
 ### 🎨 Experiencia Visual y Temas
@@ -102,18 +115,18 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 152 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 162 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
-│       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician)
+│       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician, adminAssistant)
 │       ├── components/       # Componentes globales y protectores de ruta (ProtectedRoute)
 │       ├── context/          # ThemeContext (Modo Claro/Oscuro OKLCH)
 │       ├── features/
-│       │   ├── admin/        # Módulo administrativo Workbench y analítica
-│       │   ├── technician/   # Portal de técnico, mesa de trabajo y asistente Ohm
+│       │   ├── admin/        # Módulo administrativo Workbench, analítica y asistente Ohm
+│       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
 │       ├── pages/            # Login, Registro y Páginas públicas
-│       ├── tests/            # 99 tests con Vitest y Testing Library
+│       ├── tests/            # 149 tests con Vitest y Testing Library (20 suites)
 │       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
 │       ├── App.css           # Estilos Workbench y temas OKLCH
 │       └── App.jsx           # Rutas y enrutador principal
@@ -229,7 +242,7 @@ La suite de backend valida modelos, servicios, guards de seguridad, cálculo de 
 cd backend
 source .venv/bin/activate
 
-# Ejecutar todos los tests (152 tests pasando al 100%)
+# Ejecutar todos los tests (180+ tests pasando al 100%)
 pytest
 
 # Ejecutar suite con reporte de cobertura
@@ -241,12 +254,12 @@ pytest tests/integration/
 
 ### Tests del Frontend (Vitest + Testing Library)
 
-La suite de frontend prueba componentes visuales, interactividad del Workbench Kanban, modales de configuración de SLAs, analíticas de tiempos de ciclo y utilidades:
+La suite de frontend prueba componentes visuales, interactividad del Workbench Kanban, modales de configuración de SLAs, analíticas de tiempos de ciclo, validación móvil ecuatoriana, sanitización client-side y utilidades:
 
 ```bash
 cd frontend
 
-# Ejecutar todos los tests (99 tests pasando al 100%)
+# Ejecutar todos los tests (149 tests pasando al 100% en 20 suites)
 npm test
 
 # Ejecutar con reporte de cobertura
@@ -258,10 +271,13 @@ npm run test:coverage
 ## Seguridad y Aislamiento
 
 - **Aislamiento Multi-Tenant (Seguridad C1):** Todo endpoint autenticado extrae y valida el `shop_id` desde el token JWT. La capa de servicios reaplica filtros estrictos por tienda en todas las consultas y mutaciones.
+- **Blindaje de Ohm (Scope Técnico & Anti Prompt-Injection):** Pre-clasificación en una sola llamada JSON (`gemini-3.5-flash-lite`) que intercepta intentos de jailbreak y temas no técnicos con respuesta neutra enlatada, técnica sandwich en el system prompt y registro inmutable de auditoría en `ai_security_events`.
 - **Protección de Datos Sensibles (PII):** Los teléfonos, correos y tokens de clientes se enmascaran visualmente en pantalla por defecto; el PIN de desbloqueo del equipo se almacena cifrado con Fernet y sólo se expone a técnicos autorizados.
+- **Sanitización Defensiva de Datos:** Trimming y validación estricta en Pydantic v2 (backend) y formularios reactivos (frontend), impidiendo inyecciones de cadenas vacías o espacios en blanco en campos de texto de clientes, repuestos, técnicos y órdenes.
+- **Validación Móvil Ecuatoriana:** Formato estricto (`09XXXXXXXX` / `+5939XXXXXXXX`) para registro de clientes y contacto de talleres, asegurando enlaces de WhatsApp operacionales.
 - **Protección contra Fuerza Bruta:** Rate limiting mediante SlowAPI activo en rutas críticas (ej. `/auth/login` limitado a 5 intentos/min por IP).
 - **Protección de Transición de Estados:** Guard estricto que impide enviar tickets a reparación sin un técnico responsable asignado.
-- **Auditoría Inmutable:** Historial inalterable de cambios de estado registrado en base de datos.
+- **Auditoría Inmutable:** Historial inalterable de cambios de estado registrado en base de datos (`ticket_status_history`).
 
 ---
 

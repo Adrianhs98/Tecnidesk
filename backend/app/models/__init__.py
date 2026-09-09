@@ -18,6 +18,7 @@ from app.models.ticket_item import TicketItem
 from app.models.webhook_log import WebhookLog
 from app.models.ticket_evidence import TicketEvidence
 from app.models.ticket_status_history import TicketStatusHistory
+from app.models.ai_security_event import AiSecurityEvent
 from app.models.diagnostic import (
     DiagnosticCase,
     DiagnosticConversation,
@@ -44,4 +45,5 @@ __all__ = [
     "DiagnosticConversation",
     "DiagnosticMessage",
     "DiagnosticQueryLog",
+    "AiSecurityEvent",
 ]

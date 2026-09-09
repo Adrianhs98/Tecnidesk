@@ -608,12 +608,154 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       expect(screen.queryByTestId("reveal-pin-btn")).not.toBeInTheDocument();
       expect(screen.getByText(/PIN Protegido \(Modo Supervisor: solo lectura\)/i)).toBeInTheDocument();
 
-      // Diagnostic notes disabled and save button hidden
+      // Diagnostic notes disabled and save/generate buttons hidden
       expect(screen.queryByTestId("save-notes-btn")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("generate-diagnostic-btn")).not.toBeInTheDocument();
       expect(screen.getByTestId("diagnostic-notes-input")).toBeDisabled();
 
       // Ohm button hidden
       expect(screen.queryByTestId("open-ai-copilot-ticket-btn")).not.toBeInTheDocument();
+    });
+
+    it("disables Generar con Ohm button when ticket status is not eligible", () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <TechnicianWorkModal
+            ticket={{ ...mockTicket, status: "EN_REVISION" }}
+            onClose={vi.fn()}
+            onStatusChange={vi.fn()}
+          />
+        </QueryClientProvider>
+      );
+
+      const generateBtn = screen.getByTestId("generate-diagnostic-btn");
+      expect(generateBtn).toBeDisabled();
+      expect(screen.queryByTestId("draft-diagnostic-section")).not.toBeInTheDocument();
+    });
+
+    it("generates draft diagnostic with Ohm, displays review section, and applies it to ticket", async () => {
+      const onStatusChangeSpy = vi.fn();
+      const eligibleTicket = {
+        ...mockTicket,
+        id: "ticket-work-eligible",
+        status: "EN_REPARACION",
+        draft_diagnostic: null,
+      };
+
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url) => {
+        if (url.includes("/tickets/ticket-work-eligible/generate-diagnostic")) {
+          return {
+            ok: true,
+            json: async () => ({ draft_diagnostic: "Borrador generado por Ohm para el cliente" }),
+          };
+        }
+        if (url.includes("/tickets/ticket-work-eligible/apply-diagnostic")) {
+          return {
+            ok: true,
+            json: async () => ({
+              ...eligibleTicket,
+              diagnostic_notes: "Borrador generado por Ohm para el cliente (editado)",
+              draft_diagnostic: "Borrador generado por Ohm para el cliente (editado)",
+              diagnostic_applied_at: new Date().toISOString(),
+            }),
+          };
+        }
+        if (url.includes("/tickets/ticket-work-eligible/evidences")) {
+          return { ok: true, json: async () => [] };
+        }
+        if (url.includes("/tickets/ticket-work-eligible")) {
+          return { ok: true, json: async () => eligibleTicket };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <TechnicianWorkModal
+            ticket={eligibleTicket}
+            onClose={vi.fn()}
+            onStatusChange={onStatusChangeSpy}
+          />
+        </QueryClientProvider>
+      );
+
+      // Button is enabled for EN_REPARACION
+      const generateBtn = screen.getByTestId("generate-diagnostic-btn");
+      expect(generateBtn).not.toBeDisabled();
+
+      // Click generate
+      fireEvent.click(generateBtn);
+
+      // Draft section appears with generated text
+      await waitFor(() => {
+        expect(screen.getByTestId("draft-diagnostic-section")).toBeInTheDocument();
+      });
+      const draftInput = screen.getByTestId("draft-diagnostic-input");
+      expect(draftInput).toHaveValue("Borrador generado por Ohm para el cliente");
+
+      // Generate button is now disabled because draft already exists
+      expect(generateBtn).toBeDisabled();
+
+      // Technician edits the draft
+      fireEvent.change(draftInput, {
+        target: { value: "Borrador generado por Ohm para el cliente (editado)" },
+      });
+
+      // Technician clicks Apply
+      const applyBtn = screen.getByTestId("apply-draft-diagnostic-btn");
+      fireEvent.click(applyBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("diagnostic-applied-banner")).toBeInTheDocument();
+        expect(screen.getByTestId("diagnostic-notes-input")).toHaveValue(
+          "Borrador generado por Ohm para el cliente (editado)"
+        );
+        expect(onStatusChangeSpy).toHaveBeenCalled();
+      });
+    });
+
+    it("displays error banner if Ohm diagnostic generation fails (e.g. 400 empty chat)", async () => {
+      const eligibleTicket = {
+        ...mockTicket,
+        id: "ticket-work-err",
+        status: "EN_REPARACION",
+        draft_diagnostic: null,
+      };
+
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url) => {
+        if (url.includes("/tickets/ticket-work-err/generate-diagnostic")) {
+          return {
+            ok: false,
+            json: async () => ({ detail: "No hay historial de conversación previo con Ohm" }),
+          };
+        }
+        if (url.includes("/tickets/ticket-work-err/evidences")) {
+          return { ok: true, json: async () => [] };
+        }
+        if (url.includes("/tickets/ticket-work-err")) {
+          return { ok: true, json: async () => eligibleTicket };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <TechnicianWorkModal
+            ticket={eligibleTicket}
+            onClose={vi.fn()}
+            onStatusChange={vi.fn()}
+          />
+        </QueryClientProvider>
+      );
+
+      const generateBtn = screen.getByTestId("generate-diagnostic-btn");
+      fireEvent.click(generateBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("diagnostic-error-banner")).toHaveTextContent(
+          "No hay historial de conversación previo con Ohm"
+        );
+      });
     });
   });
 
@@ -648,21 +790,19 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       });
     });
 
-    it("AiChatDrawer in ticket context displays active banner and allows applying diagnosis", async () => {
+    it("AiChatDrawer in ticket context displays active banner and does not render apply button on assistant bubbles", async () => {
       const mockTicket = {
         id: "t-ctx-1",
         device_brand: "Apple",
         device_model: "iPhone 11",
         issue_description: "Consumo alto",
       };
-      const onApplySpy = vi.fn();
 
       render(
         <AiChatDrawer
           isOpen={true}
           onClose={vi.fn()}
           ticketContext={mockTicket}
-          onApplyToDiagnosis={onApplySpy}
         />
       );
 
@@ -676,10 +816,10 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
         expect(screen.getByText(/Respuesta estructurada del copiloto IA/i)).toBeInTheDocument();
       });
 
-      // Click "Aplicar al Diagnóstico"
-      const applyBtn = screen.getByTestId("apply-to-diagnosis-btn");
-      fireEvent.click(applyBtn);
-      expect(onApplySpy).toHaveBeenCalledWith("Respuesta estructurada del copiloto IA", mockTicket);
+      // Assert that per-bubble apply button was decoupled and removed
+      expect(screen.queryByTestId("apply-to-diagnosis-btn")).not.toBeInTheDocument();
+      // Confirm RAG button remains accessible
+      expect(screen.getByTestId("confirm-rag-btn")).toBeInTheDocument();
     });
 
     it("AiChatDrawer clears the previous ticket transcript before loading another ticket", async () => {
@@ -818,6 +958,97 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       expect(screen.getByTestId("supervisor-readonly-indicator")).toBeInTheDocument();
       expect(screen.queryByTestId("reveal-pin-btn")).not.toBeInTheDocument();
       expect(screen.queryByTestId("open-ai-copilot-ticket-btn")).not.toBeInTheDocument();
+    });
+
+    it("renders 'Ingresar Equipo' button when allow_technician_intake is true and opens NewTicketModal on click", async () => {
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url) => {
+        if (url.includes("/technicians/me")) {
+          return {
+            ok: true,
+            json: async () => ({
+              id: "tech-uuid-1",
+              full_name: "Lucia Gomez",
+              role: "technician",
+              active_tickets_count: 3,
+              completed_tickets_count: 8,
+              declared_specialty: "Microsoldadura",
+              allow_technician_intake: true,
+            }),
+          };
+        }
+        if (url.includes("/shops/sla-config")) {
+          return { ok: true, json: async () => ({ effective_thresholds: { EN_ESPERA_INGRESO: 48, EN_REVISION: 24, EN_REPARACION: 48 } }) };
+        }
+        if (url.includes("/technicians")) {
+          return { ok: true, json: async () => [] };
+        }
+        if (url.includes("/tickets")) {
+          return { ok: true, json: async () => ({ items: [], total: 0 }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      render(
+        <MemoryRouter>
+          <ThemeProvider>
+            <QueryClientProvider client={queryClient}>
+              <TechnicianDashboard />
+            </QueryClientProvider>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+
+      const intakeBtn = await screen.findByTestId("tech-new-ticket-btn");
+      expect(intakeBtn).toBeInTheDocument();
+      expect(intakeBtn).toHaveTextContent("Ingresar Equipo");
+
+      fireEvent.click(intakeBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText("Ingresar Nuevo Equipo")).toBeInTheDocument();
+      });
+    });
+
+    it("does not render 'Ingresar Equipo' button when allow_technician_intake is false", async () => {
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url) => {
+        if (url.includes("/technicians/me")) {
+          return {
+            ok: true,
+            json: async () => ({
+              id: "tech-uuid-1",
+              full_name: "Lucia Gomez",
+              role: "technician",
+              active_tickets_count: 3,
+              completed_tickets_count: 8,
+              declared_specialty: "Microsoldadura",
+              allow_technician_intake: false,
+            }),
+          };
+        }
+        if (url.includes("/shops/sla-config")) {
+          return { ok: true, json: async () => ({ effective_thresholds: { EN_ESPERA_INGRESO: 48, EN_REVISION: 24, EN_REPARACION: 48 } }) };
+        }
+        if (url.includes("/tickets")) {
+          return { ok: true, json: async () => ({ items: [], total: 0 }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      render(
+        <MemoryRouter>
+          <ThemeProvider>
+            <QueryClientProvider client={queryClient}>
+              <TechnicianDashboard />
+            </QueryClientProvider>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("kpi-activos")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId("tech-new-ticket-btn")).not.toBeInTheDocument();
     });
   });
 });

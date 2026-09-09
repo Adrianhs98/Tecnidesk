@@ -14,6 +14,7 @@ import {
   Zap,
   HelpCircle,
   CornerDownLeft,
+  BarChart3,
 } from "lucide-react";
 import {
   sendDiagnosticChat,
@@ -21,6 +22,7 @@ import {
   getDiagnosticChatHistory,
   confirmCorrection,
 } from "../../api/diagnostic";
+import { sendAdminAssistantQuery } from "../../api/adminAssistant";
 
 // Quick diagnostic prompt suggestions
 const QUICK_PROMPTS = [
@@ -28,6 +30,13 @@ const QUICK_PROMPTS = [
   { label: "📱 Touch / Display", text: "¿Cuáles son las fallas más comunes de pantalla táctil y cómo diferenciar falla de display vs controlador en placa?" },
   { label: "🔋 Batería / Consumo", text: "El teléfono consume 0.45A apagado antes del botón de encendido. ¿Cómo identificar el corto en línea principal?" },
   { label: "🔊 Sin audio / Codec", text: "Falla de micrófono y altavoz en llamadas. ¿Procedimiento para diagnosticar IC de audio?" },
+];
+
+// Admin quick metric chips
+const ADMIN_QUICK_CHIPS = [
+  { label: "💰 Ganancias de hoy", text: "Ganancias de hoy", testId: "admin-chip-revenue" },
+  { label: "📥 Equipos ingresados hoy", text: "Equipos ingresados hoy", testId: "admin-chip-intake" },
+  { label: "⏱️ Equipos sin tocar", text: "Equipos sin tocar", testId: "admin-chip-untouched" },
 ];
 
 function MessageContent({ text }) {
@@ -94,13 +103,16 @@ export default function AiChatDrawer({
   ticketContext = null,
   onClearTicketContext,
   onApplyToDiagnosis,
+  context = "ticket", // "ticket" | "admin"
 }) {
+  const isAdmin = context === "admin";
   const [messages, setMessages] = useState([
     {
       id: "welcome",
       role: "assistant",
-      content:
-        "👋 ¡Hola! Soy tu **Ohm\*\* (Gemini 3.6 Flash). Puedo ayudarte a diagnosticar cortos, analizar esquemas, interpretar consumos de fuente y resolver fallas complejas.",
+      content: isAdmin
+        ? "👋 ¡Hola! Soy **Ohm**, tu asistente de gestión. Puedo informarte al instante sobre las ganancias del día, el volumen de equipos ingresados y las órdenes estancadas sin avance. Usá los atajos rápidos o consultame lo que necesites."
+        : "👋 ¡Hola! Soy tu **Ohm** (Gemini 3.6 Flash). Puedo ayudarte a diagnosticar cortos, analizar esquemas, interpretar consumos de fuente y resolver fallas complejas.",
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
@@ -140,13 +152,26 @@ export default function AiChatDrawer({
   useEffect(() => {
     let cancelled = false;
     activeTicketIdRef.current = ticketContext?.id ?? null;
+    setErrorMsg(null);
+    setShowRagForm(false);
+
+    if (isAdmin) {
+      const adminWelcomeMessage = {
+        id: "welcome",
+        role: "assistant",
+        content:
+          "👋 ¡Hola! Soy **Ohm**, tu asistente de gestión. Puedo informarte al instante sobre las ganancias del día, el volumen de equipos ingresados y las órdenes estancadas sin avance. Usá los atajos rápidos o consultame lo que necesites.",
+      };
+      setMessages([adminWelcomeMessage]);
+      return () => { cancelled = true; };
+    }
+
     const welcomeMessage = {
       id: "welcome",
       role: "assistant",
       content: "👋 Hola, soy Ohm. Te ayudo con pasos breves y prácticos para la reparación.",
     };
-    setErrorMsg(null);
-    setShowRagForm(false);
+
     if (!ticketContext?.id) {
       setMessages([welcomeMessage]);
       return () => { cancelled = true; };
@@ -161,7 +186,7 @@ export default function AiChatDrawer({
         if (!cancelled) setErrorMsg(error.message || "No se pudo cargar el historial del ticket.");
       });
     return () => { cancelled = true; };
-  }, [ticketContext?.id]);
+  }, [ticketContext?.id, isAdmin]);
 
   // Auto-scroll to bottom of chat
   const scrollToBottom = () => {
@@ -186,12 +211,14 @@ export default function AiChatDrawer({
     setErrorMsg(null);
 
     const userMsgId = `user-${Date.now()}`;
-    setMessages((prev) => [...prev, { id: userMsgId, role: "technician", content: userText }]);
+    setMessages((prev) => [...prev, { id: userMsgId, role: isAdmin ? "admin" : "technician", content: userText }]);
     setIsSending(true);
 
     try {
       let response;
-      if (ticketContext?.id) {
+      if (isAdmin) {
+        response = await sendAdminAssistantQuery(userText);
+      } else if (ticketContext?.id) {
         response = await sendDiagnosticChat(ticketContext.id, userText);
       } else {
         response = await sendFreeDiagnosticChat(userText);
@@ -200,14 +227,14 @@ export default function AiChatDrawer({
       const assistantMsg = {
         id: response.id || `ai-${Date.now()}`,
         role: "assistant",
-        content: response.content || response.text || "No se obtuvo respuesta de Ohm.",
+        content: response.reply || response.content || response.text || "No se obtuvo respuesta de Ohm.",
       };
 
-      if (activeTicketIdRef.current === requestTicketId) {
+      if (isAdmin || activeTicketIdRef.current === requestTicketId) {
         setMessages((prev) => [...prev, assistantMsg]);
       }
     } catch (err) {
-      setErrorMsg(err.message || "Error al comunicarse con el Ohm");
+      setErrorMsg(err.message || "Error al comunicarse con Ohm");
     } finally {
       setIsSending(false);
     }
@@ -284,7 +311,11 @@ export default function AiChatDrawer({
             </div>
             <div>
               <h3 className="ai-drawer-title">Ohm</h3>
-              <span className="ai-drawer-subtitle">Gemini 3.7 Flash • Diagnóstico & RAG</span>
+              <span className="ai-drawer-subtitle">
+                {isAdmin
+                  ? "Gemini 3.5 Flash Lite • Gestión & Métricas del Taller"
+                  : "Gemini 3.7 Flash • Diagnóstico & RAG"}
+              </span>
             </div>
           </div>
           <button
@@ -299,7 +330,12 @@ export default function AiChatDrawer({
 
         {/* Context Status Banner */}
         <div className="ai-context-banner">
-          {ticketContext ? (
+          {isAdmin ? (
+            <div className="ai-context-free" data-testid="ai-admin-mode-banner">
+              <BarChart3 size={14} />
+              <span>Panel de Gestión • Métricas Operativas en Tiempo Real</span>
+            </div>
+          ) : ticketContext ? (
             <div className="ai-context-active" data-testid="ai-active-ticket-banner">
               <Smartphone size={15} />
               <div className="ai-context-text">
@@ -366,15 +402,6 @@ export default function AiChatDrawer({
                     <div className="ai-bubble-actions">
                       <button
                         type="button"
-                        className="ai-action-chip primary"
-                        onClick={() => handleApplyAdvice(m.content)}
-                        data-testid="apply-to-diagnosis-btn"
-                      >
-                        <Check size={12} />
-                        <span>Aplicar al Diagnóstico</span>
-                      </button>
-                      <button
-                        type="button"
                         className="ai-action-chip secondary"
                         onClick={() => handleOpenRag(m.content)}
                         data-testid="confirm-rag-btn"
@@ -400,6 +427,8 @@ export default function AiChatDrawer({
                 <span className="ai-thinking-label">
                   {isRetrying
                     ? "Ohm está experimentando alta demanda, reintentando conexión..."
+                    : isAdmin
+                    ? "Consultando métricas y consolidando datos del taller..."
                     : "Analizando esquemas y base de conocimiento..."}
                 </span>
               </div>
@@ -487,13 +516,14 @@ export default function AiChatDrawer({
 
         {/* Quick Suggestion Chips */}
         <div className="ai-quick-chips">
-          {QUICK_PROMPTS.map((qp, idx) => (
+          {(isAdmin ? ADMIN_QUICK_CHIPS : QUICK_PROMPTS).map((qp, idx) => (
             <button
               key={idx}
               type="button"
               className="ai-chip-btn"
               onClick={() => handleSendMessage(qp.text)}
               disabled={isSending}
+              data-testid={qp.testId || `quick-chip-${idx}`}
             >
               {qp.label}
             </button>
@@ -510,7 +540,9 @@ export default function AiChatDrawer({
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                ticketContext
+                isAdmin
+                  ? "Consultar métricas del taller a Ohm (Shift+Enter para salto de línea)..."
+                  : ticketContext
                   ? `Pregunta sobre ${ticketContext.device_brand} ${ticketContext.device_model}...`
                   : "Pregúntale a Ohm (Shift+Enter para salto de línea)..."
               }

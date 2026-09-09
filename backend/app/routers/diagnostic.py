@@ -100,7 +100,6 @@ async def preview_diagnosis(
     )
     if not search_result.had_sufficient_evidence or not search_result.cases:
         return {"suggestion": "No hay suficientes casos similares para sugerir."}
-        
     best = search_result.cases[0]
     return {
         "suggestion": f"Basado en casos anteriores de {payload.brand} {payload.model}: Posible {best.diagnosed_cause}. Solución: {best.solution_applied}."
@@ -120,6 +119,13 @@ from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageRespons
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.technician import Technician
 from app.services.model_router import ModelRouter
+from app.services.ai_safety_service import (
+    classify_message_safety,
+    log_ai_security_event,
+    CANNED_REDIRECT_RESPONSE,
+    ANTI_INJECTION_SYSTEM_INSTRUCTION,
+    SANDWICH_PROMPT_REMINDER,
+)
 
 
 @router.post(
@@ -147,12 +153,47 @@ async def workshop_diagnostic_chat(
         labels = [f"{item.device_brand} {item.device_model} ({item.status.value if hasattr(item.status, 'value') else item.status})" for item in tickets]
         answer = "No encontré tickets que coincidan." if not labels else "Tickets: " + "; ".join(labels)
         return DiagnosticMessageResponse(id=uuid.uuid4(), role="assistant", content=answer, created_at=datetime.now(timezone.utc), model_route="database", model="database")
+
+    shop_id = current_user.shop_id
+    tech_id = tech.id if tech else None
+
+    safety = await classify_message_safety(payload.message)
+    if safety.injection_attempt:
+        await log_ai_security_event(
+            db=db,
+            shop_id=shop_id,
+            technician_id=tech_id,
+            ticket_id=None,
+            event_type="injection_attempt",
+            message_excerpt=payload.message,
+        )
+        return DiagnosticMessageResponse(
+            id=uuid.uuid4(),
+            role="assistant",
+            content=CANNED_REDIRECT_RESPONSE,
+            created_at=datetime.now(timezone.utc),
+            model_route="safety_guard",
+            model="canned",
+        )
+
+    if not safety.on_topic:
+        return DiagnosticMessageResponse(
+            id=uuid.uuid4(),
+            role="assistant",
+            content=CANNED_REDIRECT_RESPONSE,
+            created_at=datetime.now(timezone.utc),
+            model_route="safety_guard",
+            model="canned",
+        )
+
     route = ModelRouter.select(payload.message, ticket_context=False)
     prompt = (
         "Eres Ohm, un asistente de taller especializado en microelectrónica, reparación de "
         "hardware, telefonía, computadoras y electrodomésticos. Responde paso a paso, de "
         "forma concisa y con acciones prácticas.\n"
-        f"Consulta: {payload.message}"
+        f"{ANTI_INJECTION_SYSTEM_INSTRUCTION}\n"
+        f"Consulta: {payload.message}\n"
+        f"{SANDWICH_PROMPT_REMINDER}"
     )
 
     try:
