@@ -15,6 +15,7 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const TrackingPortal = lazy(() => import("./pages/TrackingPortal"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ export default function App() {
       <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--accent)' }}><div className="spinner" /></div>}>
         <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/page" element={<LandingPage />} />
         <Route path="/track/:token" element={<TrackingPortal />} />
         <Route path="/tracking/:token" element={<TrackingPortal />} />
         <Route

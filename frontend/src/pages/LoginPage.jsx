@@ -15,7 +15,10 @@ export default function LoginPage() {
     setError(null);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (loading) return;
+
     const email = form.username.trim().toLowerCase();
     if (!email || !form.password.trim()) {
       setError("Por favor completa todos los campos.");
@@ -62,9 +65,9 @@ export default function LoginPage() {
       </div>
       <div className="login-card">
         <div className="login-card-header">
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--surface2)", border: "1px solid var(--border2)", borderRadius: 999, padding: "5px 14px 5px 9px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: 999, padding: "5px 14px 5px 9px" }}>
             <div className="logo-dot" />
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text2)", letterSpacing: "0.08em", textTransform: "uppercase" }}>TecniDesk Admin</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>TecniDesk Admin</span>
           </div>
           <h2>Panel de Control</h2>
           <p>Ingresa tus credenciales para continuar</p>
@@ -76,55 +79,66 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="form-group">
-          <label className="form-label">Usuario o Correo</label>
-          <input className="form-input" name="username" type="text" placeholder="taller@correo.com" value={form.username} onChange={handleChange} autoComplete="username" />
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 24 }}>
-          <label className="form-label">Contrasena</label>
-          <div style={{ position: "relative" }}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Usuario o Correo</label>
             <input
-              className="form-input mono"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="********"
-              value={form.password}
+              className="form-input"
+              name="username"
+              type="text"
+              placeholder="taller@correo.com"
+              value={form.username}
               onChange={handleChange}
-              autoComplete="current-password"
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              autoComplete="username"
+              required
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              style={{ position: "absolute", color: "var(--accent)", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer" }}
-            >
-              {showPassword ? "Ocultar" : "Ver"}
-            </button>
           </div>
-        </div>
 
-        <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? "Verificando..." : "Ingresar"}
-        </button>
+          <div className="form-group" style={{ marginBottom: 24 }}>
+            <label className="form-label">Contrasena</label>
+            <div style={{ position: "relative" }}>
+              <input
+                className="form-input mono"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="********"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                style={{ position: "absolute", color: "var(--color-accent)", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer" }}
+              >
+                {showPassword ? "Ocultar" : "Ver"}
+              </button>
+            </div>
+          </div>
 
-        <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "var(--text3)" }}>
+          <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%" }}>
+            {loading ? "Verificando..." : "Ingresar"}
+          </button>
+        </form>
+
+        <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "var(--text-tertiary)" }}>
           Olvidaste tu contrasena?{" "}
           <button
             type="button"
             onClick={() => navigate("/forgot-password")}
-            style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, padding: 0 }}
+            style={{ background: "none", border: "none", color: "var(--color-accent)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, padding: 0 }}
           >
             Recuperar aqui
           </button>
         </p>
 
-        <p style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: "var(--text3)" }}>Acceso exclusivo para personal autorizado</p>
+        <p style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>Acceso exclusivo para personal autorizado</p>
       </div>
 
-      <p style={{ marginTop: 24, fontSize: 11, color: "var(--text3)" }}>
-        Impulsado por <span style={{ color: "var(--text2)" }}>TecniDesk</span>
+      <p style={{ marginTop: 24, fontSize: 11, color: "var(--text-tertiary)" }}>
+        Impulsado por <span style={{ color: "var(--text-secondary)" }}>TecniDesk</span>
       </p>
     </div>
   );

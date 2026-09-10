@@ -150,6 +150,7 @@ async def _get_ticket_or_404(
         select(Ticket)
         .where(Ticket.id == ticket_id, Ticket.shop_id == shop_id)
         .options(*options)
+        .execution_options(populate_existing=True)
     )
     ticket = result.scalar_one_or_none()
     if ticket is None:
@@ -845,10 +846,21 @@ async def update_ticket_status(
 
     try:
         await db.commit()
-        await db.refresh(ticket)
     except Exception:
         await db.rollback()
         raise
+
+    # Re-cargar con relaciones (db.refresh pierde las relaciones eager-loaded)
+    refreshed = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket.id)
+        .options(
+            selectinload(Ticket.customer),
+            selectinload(Ticket.technician),
+            selectinload(Ticket.status_history),
+        )
+    )
+    ticket = refreshed.scalar_one()
 
     # Webhook ticket.status_changed con old/new status
     await _dispatch_webhook(

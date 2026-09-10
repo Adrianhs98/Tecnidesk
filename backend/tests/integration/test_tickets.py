@@ -196,19 +196,19 @@ async def test_get_ticket_detail_includes_status_history(client, db_session):
     )
     db_session.add(ticket)
     await db_session.flush()
-
     app.dependency_overrides[subscription_guard] = lambda: user
 
     try:
+        ticket_id = ticket.id
         # 1. Update status to EN_REVISION
         patch_res = await client.patch(
-            f"/tickets/{ticket.id}/status",
+            f"/tickets/{ticket_id}/status",
             json={"status": "EN_REVISION"},
         )
         assert patch_res.status_code == 200
 
         # 2. Get ticket detail
-        get_res = await client.get(f"/tickets/{ticket.id}")
+        get_res = await client.get(f"/tickets/{ticket_id}")
         assert get_res.status_code == 200
         detail_data = get_res.json()
 
@@ -222,3 +222,71 @@ async def test_get_ticket_detail_includes_status_history(client, db_session):
         assert latest_history["changed_by_user_id"] == str(user.id)
     finally:
         app.dependency_overrides.pop(subscription_guard, None)
+
+
+@pytest.mark.asyncio
+async def test_technician_patch_status_from_ingresado_to_en_revision(client, db_session):
+    """
+    Verifica que un técnico pueda cambiar el estado de EN_ESPERA_INGRESO a EN_REVISION
+    y que la respuesta serialice correctamente TicketListResponse con customer y technician.
+    """
+    shop_id = uuid.uuid4()
+    shop = Shop(
+        id=shop_id,
+        business_name="Tech Workshop",
+        owner_name="Owner",
+        subdomain=f"tech-shop-{uuid.uuid4().hex[:8]}",
+        contact_email="techshop@test.com",
+        contact_whatsapp="593999999999",
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(shop)
+
+    tech_user = User(
+        shop_id=shop_id,
+        role=UserRoleEnum.technician,
+        full_name="Tech Juan",
+        email=f"tech-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="fakehash",
+        is_active=True,
+    )
+    db_session.add(tech_user)
+
+    customer = Customer(
+        shop_id=shop_id,
+        full_name="Maria Lopez",
+        phone_number="593987654321",
+        email="maria@test.com",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+
+    ticket = Ticket(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        device_brand="Xiaomi",
+        device_model="Redmi Note 11",
+        issue_description="Pantalla rota",
+        status=TicketStatusEnum.EN_ESPERA_INGRESO,
+        technician_id=None,
+        tracking_token=str(uuid.uuid4()),
+    )
+    db_session.add(ticket)
+    await db_session.flush()
+
+    app.dependency_overrides[subscription_guard] = lambda: tech_user
+
+    try:
+        patch_res = await client.patch(
+            f"/tickets/{ticket.id}/status",
+            json={"status": "EN_REVISION"},
+        )
+        assert patch_res.status_code == 200
+        data = patch_res.json()
+        assert data["status"] == "EN_REVISION"
+        assert data["id"] == str(ticket.id)
+        assert data["customer"] is not None
+        assert data["customer"]["full_name"] == "Maria Lopez"
+    finally:
+        app.dependency_overrides.pop(subscription_guard, None)
+

@@ -18,6 +18,7 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Auditoría Inmutable de Estados:** Registro síncrono en `ticket_status_history` de cada transición de estado con autor, timestamp y motivo.
 - **SLAs Dinámicos y Multi-Tenant:** Umbrales de SLA configurables por cada taller (`shops.sla_config`) con panel de ajustes en tiempo real y fallback automático a defaults del sistema.
 - **Analítica de Tiempos de Ciclo y Cuellos de Botella:** Endpoint y modal interactivo (`GET /tickets/analytics/cycle-times`) para monitorear Lead Time promedio, Cycle Time activo, desglose por etapa, porcentaje de cumplimiento de SLA y detección automática de cuellos de botella.
+- **Ergonomía Desktop Calibrada (1500px):** Contenedor centralizado (`.workbench-canvas`) optimizado para evitar dispersión horizontal en pantallas panorámicas, preservando la adaptabilidad fluida en tablets y móviles.
 
 ### 👨‍🔧 Portal de Técnico & Mesa de Trabajo Dedicada (`/tech`)
 - **Experiencia Operativa para el Técnico:** Enrutamiento inteligente por rol (`/tech` vs `/admin`), pestañas dedicadas de "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic (`POST /tickets/{id}/assign-me`).
@@ -51,6 +52,7 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Revelado Seguro Bajo Demanda:** Botón interactivo con ícono de ojo (`Eye`/`EyeOff`) en el modal de detalles para técnicos autorizados.
 - **Validación Móvil Ecuatoriana:** Validador y normalizador centralizado (`utils/phone.js`) que verifica teléfonos en formato nacional (`09XXXXXXXX`) e internacional (`+5939XXXXXXXX`) para intake y generación fiable de enlaces click-to-chat de WhatsApp.
 - **Sanitización Defensiva Multi-Capa:** Validación estricta con Pydantic v2 en backend y guards client-side en formularios (Tickets, Inventario, Técnicos, Login y Registro) que recortan espacios residuales (*trimming*), rechazan entradas puras en blanco y convierten valores vacíos en `null`/`None`.
+- **Sanitización de Consultas de Búsqueda:** Filtros de búsqueda en backend (`/tickets`, `/inventory`, `/clients`) con normalización automática de espacios en blanco y coerción a `None` para prevenir falsos negativos con resultados vacíos.
 - **Cifrado Simétrico Fernet:** Cifrado en base de datos de contraseñas y patrones de desbloqueo de los dispositivos (`pin_or_password`) con rate limiting y auditoría.
 - **Autenticación Robusta:** JWT con tokens de acceso de corta duración, normalización de correos en minúsculas y refresh tokens estatales de un solo uso con rotación y revocación inmediata en logout.
 - **Control de Suscripción:** Middleware `subscription_guard` que restringe el acceso con `HTTP 402 Payment Required` ante suscripciones vencidas o suspendidas.
@@ -58,6 +60,7 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 ### 🎨 Experiencia Visual y Temas
 - **Modo Claro / Modo Oscuro:** Sistema de temas con `ThemeContext` basado en una paleta cálida ámbar calibrada en **OKLCH** y persistencia en `localStorage`.
 - **Diseño Atmospheric y N5 Floating Pill:** Barra de navegación flotante y componentes visuales de alto contraste diseñados para entornos de taller.
+- **Elevación y Contraste OKLCH en Tarjetas:** Separación visual optimizada de `.ticket-card` y `.tech-ticket-card` mediante `var(--bg-surface)` (delta de luminosidad de +5% en modo oscuro y balance cálido en modo claro) con sombras de elevación estratificadas en ambos temas.
 - **Caché Zero-Delay:** Carga instantánea de detalles con React Query (`initialData` y *stale-while-revalidate*).
 
 ### 📱 Portal Público de Rastreo & Whitelabeling
