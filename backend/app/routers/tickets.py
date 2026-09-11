@@ -36,6 +36,7 @@ from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User
 from app.schemas.ticket import (
     ApplyDiagnosticRequest,
+    BusinessInsightsResponse,
     CycleTimeAnalyticsResponse,
     DraftDiagnosticResponse,
     TicketAssignIn,
@@ -179,6 +180,28 @@ async def get_cycle_time_analytics(
     db: AsyncSession = Depends(get_db),
 ):
     return await ticket_service.get_workshop_cycle_time_metrics(
+        db=db,
+        shop_id=current_user.shop_id,
+        days=days,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4.1 GET /tickets/analytics/business-insights  ← DEBE ir ANTES de /{ticket_id}
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/analytics/business-insights",
+    response_model=BusinessInsightsResponse,
+    summary="KPIs de Negocio: Flota, Repuestos, Clientes y Técnicos",
+    description="Provee rankings de marcas/modelos, tasas de reparación, rotación de piezas, clientes recurrentes, rendimiento técnico y margen bruto.",
+)
+async def get_business_insights(
+    days: int = Query(30, ge=1, le=365, description="Ventana de tiempo en días"),
+    current_user: User = Depends(admin_guard),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ticket_service.get_workshop_business_insights(
         db=db,
         shop_id=current_user.shop_id,
         days=days,

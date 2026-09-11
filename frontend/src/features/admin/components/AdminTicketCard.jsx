@@ -351,10 +351,10 @@ export default function AdminTicketCard({ ticket, onStatusChange, slaThresholds 
 
       {/* HEADER: device name, brand badge, tracking, client name, relative age, status badge */}
       <div className="ticket-card-header">
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-            <span className="ticket-device-name font-bold text-base text-[var(--text1)]">{ticket.device_model}</span>
-            <span className="text-[11px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text3)] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, minWidth: 0 }}>
+            <span className="ticket-device-name font-bold text-base text-[var(--text1)]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ticket.device_model}</span>
+            <span className="text-[11px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text3)] px-2 py-0.5 rounded font-bold uppercase tracking-wider" style={{ flexShrink: 0 }}>
               {ticket.device_brand}
             </span>
           </div>

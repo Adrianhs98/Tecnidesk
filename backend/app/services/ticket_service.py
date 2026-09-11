@@ -1457,6 +1457,423 @@ async def get_workshop_cycle_time_metrics(
     )
 
 
+async def get_workshop_business_insights(
+    db: AsyncSession,
+    shop_id: uuid.UUID,
+    days: int = 30,
+):
+    """
+    Calcula 7 KPIs ejecutivos y operacionales del taller:
+    1. Ranking de marca/modelo por volumen de ingresos
+    2. Marca con mayor tasa de reparación confirmada (excluyendo NO_APROBADO en denominador)
+    3. Repuesto con más rotación (con cruce de stock crítico)
+    4. Clientes recurrentes (2+ equipos)
+    5. Rendimiento de técnicos (resueltos vs en banco)
+    6. Margen bruto: mano de obra vs repuestos
+    7. Alerta de repuestos críticos de alta rotación
+    """
+    from app.models.inventory import Inventory
+    from app.models.technician import Technician
+    from app.models.ticket_item import ItemTypeEnum
+    from app.schemas.ticket import (
+        BusinessInsightsResponse,
+        BrandIntakeMetric,
+        ModelIntakeMetric,
+        BrandRepairRateMetric,
+        TopPartRotationMetric,
+        CustomerRecurrenceMetrics,
+        RecurringCustomerItem,
+        TechnicianPerformanceMetric,
+        GrossMarginMetrics,
+        CriticalPartAlertMetric,
+    )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now - datetime.timedelta(days=days)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 1 & 2: Brand & Model Intake Ranking + Brand Repair Rate
+    # ─────────────────────────────────────────────────────────────────────────
+    brand_query = (
+        select(
+            Ticket.device_brand,
+            Ticket.device_model,
+            Ticket.status,
+            func.count(Ticket.id).label("cnt"),
+        )
+        .where(Ticket.shop_id == shop_id)
+        .where(Ticket.created_at >= cutoff)
+        .group_by(Ticket.device_brand, Ticket.device_model, Ticket.status)
+    )
+    brand_res = await db.execute(brand_query)
+    brand_rows = brand_res.all()
+
+    brand_stats: dict[str, dict] = {}
+    total_workshop_tickets_in_window = 0
+
+    for row in brand_rows:
+        brand_raw = (row.device_brand or "").strip()
+        brand_name = brand_raw if brand_raw else "Sin Marca"
+        model_raw = (row.device_model or "").strip()
+        model_name = model_raw if model_raw else "Sin Modelo"
+        status = row.status
+        count = int(row.cnt)
+
+        total_workshop_tickets_in_window += count
+
+        if brand_name not in brand_stats:
+            brand_stats[brand_name] = {
+                "total": 0,
+                "confirmed": 0,
+                "rejected": 0,
+                "models": {},
+            }
+
+        brand_stats[brand_name]["total"] += count
+        brand_stats[brand_name]["models"][model_name] = (
+            brand_stats[brand_name]["models"].get(model_name, 0) + count
+        )
+
+        if status in (
+            TicketStatusEnum.EN_REPARACION,
+            TicketStatusEnum.ESPERANDO_REPUESTO,
+            TicketStatusEnum.LISTO_PARA_RETIRAR,
+        ):
+            brand_stats[brand_name]["confirmed"] += count
+        elif status == TicketStatusEnum.NO_APROBADO:
+            brand_stats[brand_name]["rejected"] += count
+
+    brand_ranking: list[BrandIntakeMetric] = []
+    brand_repair_rates: list[BrandRepairRateMetric] = []
+
+    sorted_brands = sorted(
+        brand_stats.items(),
+        key=lambda item: item[1]["total"],
+        reverse=True,
+    )
+
+    for brand_name, data in sorted_brands:
+        pct = (
+            round((data["total"] / total_workshop_tickets_in_window) * 100.0, 1)
+            if total_workshop_tickets_in_window > 0
+            else 0.0
+        )
+        sorted_models = sorted(
+            data["models"].items(),
+            key=lambda m: m[1],
+            reverse=True,
+        )
+        top_models = [
+            ModelIntakeMetric(model=m_name, count=m_cnt)
+            for m_name, m_cnt in sorted_models[:5]
+        ]
+        brand_ranking.append(
+            BrandIntakeMetric(
+                brand=brand_name,
+                total_tickets=data["total"],
+                percentage=pct,
+                top_models=top_models,
+            )
+        )
+
+        # KPI 2: Confirmed repair rate
+        # Denominador excluye NO_APROBADO tal como indicó el usuario
+        valid_intake = data["total"] - data["rejected"]
+        repair_rate = (
+            round((data["confirmed"] / valid_intake) * 100.0, 1)
+            if valid_intake > 0
+            else 0.0
+        )
+        brand_repair_rates.append(
+            BrandRepairRateMetric(
+                brand=brand_name,
+                total_tickets=data["total"],
+                confirmed_repairs=data["confirmed"],
+                rejected_repairs=data["rejected"],
+                repair_rate=repair_rate,
+            )
+        )
+
+    brand_repair_rates.sort(key=lambda b: (b.confirmed_repairs, b.repair_rate), reverse=True)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 3: High-Rotation Parts (con cruce de stock actual en inventario)
+    # ─────────────────────────────────────────────────────────────────────────
+    parts_query = (
+        select(
+            func.coalesce(Inventory.item_name, TicketItem.description).label("part_name"),
+            TicketItem.inventory_id,
+            func.sum(TicketItem.quantity).label("units_used"),
+            func.count(TicketItem.id).label("times_used"),
+            func.sum(TicketItem.quantity * TicketItem.unit_price).label("total_rev"),
+            func.max(Inventory.stock_quantity).label("stock_qty"),
+            func.max(Inventory.low_stock_alert).label("low_alert"),
+        )
+        .join(Ticket, Ticket.id == TicketItem.ticket_id)
+        .outerjoin(Inventory, Inventory.id == TicketItem.inventory_id)
+        .where(Ticket.shop_id == shop_id)
+        .where(Ticket.created_at >= cutoff)
+        .where(Ticket.status != TicketStatusEnum.NO_APROBADO)
+        .where(TicketItem.item_type == ItemTypeEnum.part)
+        .group_by(
+            func.coalesce(Inventory.item_name, TicketItem.description),
+            TicketItem.inventory_id,
+        )
+        .order_by(func.sum(TicketItem.quantity).desc())
+        .limit(10)
+    )
+    parts_res = await db.execute(parts_query)
+    top_parts: list[TopPartRotationMetric] = []
+    for row in parts_res.all():
+        curr_stock = int(row.stock_qty) if row.stock_qty is not None else None
+        low_alert = int(row.low_alert) if row.low_alert is not None else 3
+        is_low = (curr_stock <= low_alert) if curr_stock is not None else None
+        top_parts.append(
+            TopPartRotationMetric(
+                item_name=row.part_name or "Repuesto general",
+                units_used=int(row.units_used or 0),
+                times_used=int(row.times_used or 0),
+                total_revenue=float(row.total_rev or 0.0),
+                inventory_id=row.inventory_id,
+                current_stock=curr_stock,
+                is_low_stock=is_low,
+            )
+        )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 4: Customer Recurrence (2+ tickets en el taller)
+    # ─────────────────────────────────────────────────────────────────────────
+    total_customers_count = await db.scalar(
+        select(func.count(Customer.id)).where(Customer.shop_id == shop_id)
+    ) or 0
+
+    recurrence_query = (
+        select(
+            Customer.id,
+            Customer.full_name,
+            Customer.phone_number,
+            Customer.email,
+            func.count(Ticket.id).label("ticket_count"),
+        )
+        .join(Ticket, Ticket.customer_id == Customer.id)
+        .where(Ticket.shop_id == shop_id)
+        .group_by(Customer.id, Customer.full_name, Customer.phone_number, Customer.email)
+        .having(func.count(Ticket.id) >= 2)
+        .order_by(func.count(Ticket.id).desc())
+    )
+    recurrence_res = await db.execute(recurrence_query)
+    repeat_customers = recurrence_res.all()
+    recurring_count = len(repeat_customers)
+    recurrence_rate = (
+        round((recurring_count / total_customers_count) * 100.0, 1)
+        if total_customers_count > 0
+        else 0.0
+    )
+    top_recurring_customers = [
+        RecurringCustomerItem(
+            customer_id=row.id,
+            full_name=row.full_name,
+            phone_number=row.phone_number,
+            email=row.email,
+            ticket_count=int(row.ticket_count),
+        )
+        for row in repeat_customers[:10]
+    ]
+    customer_recurrence = CustomerRecurrenceMetrics(
+        total_customers=total_customers_count,
+        recurring_customers_count=recurring_count,
+        recurrence_rate=recurrence_rate,
+        top_recurring_customers=top_recurring_customers,
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 5: Technician Performance (Resueltos vs Activos en Banco)
+    # ─────────────────────────────────────────────────────────────────────────
+    techs_query = select(Technician).where(
+        Technician.shop_id == shop_id,
+        Technician.is_active == True,
+    )
+    techs_res = await db.execute(techs_query)
+    technicians = techs_res.scalars().all()
+
+    tech_workload_query = (
+        select(
+            Ticket.technician_id,
+            func.count(Ticket.id).filter(
+                Ticket.status == TicketStatusEnum.LISTO_PARA_RETIRAR
+            ).label("resolved_count"),
+            func.count(Ticket.id).filter(
+                Ticket.status.in_([
+                    TicketStatusEnum.EN_REVISION,
+                    TicketStatusEnum.EN_REPARACION,
+                    TicketStatusEnum.ESPERANDO_REPUESTO,
+                ])
+            ).label("active_in_bench"),
+            func.count(Ticket.id).label("total_assigned"),
+        )
+        .where(Ticket.shop_id == shop_id)
+        .where(Ticket.created_at >= cutoff)
+        .where(Ticket.technician_id.isnot(None))
+        .group_by(Ticket.technician_id)
+    )
+    tech_workload_res = await db.execute(tech_workload_query)
+    workload_map = {row.technician_id: row for row in tech_workload_res.all()}
+
+    technician_performance: list[TechnicianPerformanceMetric] = []
+    for tech in technicians:
+        wl = workload_map.get(tech.id)
+        resolved = int(wl.resolved_count) if wl else 0
+        active_in_bench = int(wl.active_in_bench) if wl else 0
+        total_assigned = int(wl.total_assigned) if wl else 0
+        completion_rate = (
+            round((resolved / total_assigned) * 100.0, 1)
+            if total_assigned > 0
+            else 0.0
+        )
+        technician_performance.append(
+            TechnicianPerformanceMetric(
+                technician_id=tech.id,
+                technician_name=tech.full_name,
+                resolved_count=resolved,
+                active_in_bench_count=active_in_bench,
+                total_assigned=total_assigned,
+                completion_rate=completion_rate,
+            )
+        )
+
+    technician_performance.sort(
+        key=lambda t: (t.resolved_count, t.total_assigned),
+        reverse=True,
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 6: Gross Margin (Mano de Obra vs Repuestos)
+    # ─────────────────────────────────────────────────────────────────────────
+    margin_query = (
+        select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (TicketItem.item_type == ItemTypeEnum.labor, TicketItem.quantity * TicketItem.unit_price),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("labor_rev"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (TicketItem.item_type == ItemTypeEnum.part, TicketItem.quantity * TicketItem.unit_price),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("parts_rev"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            TicketItem.item_type == ItemTypeEnum.part,
+                            TicketItem.quantity * func.coalesce(Inventory.cost_price, 0),
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("parts_cost"),
+        )
+        .join(Ticket, Ticket.id == TicketItem.ticket_id)
+        .outerjoin(Inventory, Inventory.id == TicketItem.inventory_id)
+        .where(Ticket.shop_id == shop_id)
+        .where(Ticket.created_at >= cutoff)
+        .where(Ticket.status != TicketStatusEnum.NO_APROBADO)
+    )
+    margin_row = (await db.execute(margin_query)).first()
+    labor_rev = float(margin_row.labor_rev) if margin_row else 0.0
+    parts_rev = float(margin_row.parts_rev) if margin_row else 0.0
+    parts_cost = float(margin_row.parts_cost) if margin_row else 0.0
+
+    parts_margin = round(parts_rev - parts_cost, 2)
+    tot_rev = round(labor_rev + parts_rev, 2)
+    gross_profit = round(labor_rev + parts_margin, 2)
+    margin_pct = round((gross_profit / tot_rev) * 100.0, 1) if tot_rev > 0 else 0.0
+    labor_pct = round((labor_rev / tot_rev) * 100.0, 1) if tot_rev > 0 else 0.0
+    parts_pct = round((parts_rev / tot_rev) * 100.0, 1) if tot_rev > 0 else 0.0
+
+    gross_margin = GrossMarginMetrics(
+        labor_revenue=round(labor_rev, 2),
+        parts_revenue=round(parts_rev, 2),
+        parts_cost=round(parts_cost, 2),
+        parts_margin=parts_margin,
+        total_revenue=tot_rev,
+        estimated_gross_profit=gross_profit,
+        margin_percentage=margin_pct,
+        labor_percentage=labor_pct,
+        parts_percentage=parts_pct,
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # KPI 7: Critical Stock Alerts (Repuestos críticos en inventario)
+    # ─────────────────────────────────────────────────────────────────────────
+    units_used_subq = (
+        select(
+            TicketItem.inventory_id,
+            func.sum(TicketItem.quantity).label("units_used"),
+        )
+        .join(Ticket, Ticket.id == TicketItem.ticket_id)
+        .where(Ticket.shop_id == shop_id)
+        .where(Ticket.created_at >= cutoff)
+        .where(Ticket.status != TicketStatusEnum.NO_APROBADO)
+        .where(TicketItem.inventory_id.isnot(None))
+        .group_by(TicketItem.inventory_id)
+        .subquery()
+    )
+
+    critical_query = (
+        select(
+            Inventory.id,
+            Inventory.item_name,
+            Inventory.sku,
+            Inventory.stock_quantity,
+            Inventory.low_stock_alert,
+            func.coalesce(units_used_subq.c.units_used, 0).label("period_used"),
+        )
+        .outerjoin(units_used_subq, units_used_subq.c.inventory_id == Inventory.id)
+        .where(Inventory.shop_id == shop_id)
+        .where(Inventory.is_active == True)
+        .where(Inventory.stock_quantity <= Inventory.low_stock_alert)
+        .order_by(
+            func.coalesce(units_used_subq.c.units_used, 0).desc(),
+            Inventory.stock_quantity.asc(),
+        )
+        .limit(10)
+    )
+    critical_res = await db.execute(critical_query)
+    critical_alerts: list[CriticalPartAlertMetric] = [
+        CriticalPartAlertMetric(
+            inventory_id=row.id,
+            item_name=row.item_name,
+            sku=row.sku,
+            current_stock=int(row.stock_quantity),
+            low_stock_alert=int(row.low_stock_alert),
+            units_used_in_period=int(row.period_used),
+            alert_level="CRITICO" if row.stock_quantity == 0 else "BAJO",
+        )
+        for row in critical_res.all()
+    ]
+
+    return BusinessInsightsResponse(
+        time_window_days=days,
+        brand_intake_ranking=brand_ranking,
+        brand_repair_rates=brand_repair_rates,
+        top_parts_rotation=top_parts,
+        customer_recurrence=customer_recurrence,
+        technician_performance=technician_performance,
+        gross_margin=gross_margin,
+        critical_stock_alerts=critical_alerts,
+    )
+
+
 async def update_ticket_partial(
     db: AsyncSession,
     ticket_id: uuid.UUID,

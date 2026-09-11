@@ -16,3 +16,17 @@ export const fetchCycleTimeAnalytics = async (days = 30) => {
 };
 
 export const getCycleTimeAnalytics = fetchCycleTimeAnalytics;
+
+/**
+ * Obtiene los 7 KPIs de negocio (Flota, Repuestos, Clientes, Técnicos y Márgenes).
+ * @param {number} days - Ventana de análisis en días (default: 30)
+ * @returns {Promise<Object>} BusinessInsightsResponse
+ */
+export const fetchBusinessInsights = async (days = 30) => {
+  const response = await authFetch(`${API_BASE}/tickets/analytics/business-insights?days=${days}`);
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Error al cargar métricas de negocio");
+  }
+  return response.json();
+};

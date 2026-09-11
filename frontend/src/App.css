@@ -1289,6 +1289,10 @@ body {
   font-size: 15px;
   font-weight: 600;
   color: var(--text1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .ticket-device-brand {
@@ -2705,6 +2709,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -2735,10 +2740,13 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .tech-card-device-icon {
   color: var(--accent);
+  flex-shrink: 0;
 }
 
 .tech-card-brand {
@@ -2749,12 +2757,17 @@ select:focus-visible {
   background: var(--bg-surface);
   padding: 2px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .tech-card-model {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .tech-card-badges {
@@ -2803,10 +2816,15 @@ select:focus-visible {
 
 .tech-card-tracking {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: var(--accent);
+}
+
+.tech-card-tracking .tech-sla-badge {
+  margin-left: auto;
 }
 
 .tech-card-age {

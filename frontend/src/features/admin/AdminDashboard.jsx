@@ -16,7 +16,6 @@ const NewTicketModal = lazy(() => import("./components/NewTicketModal"));
 const InventoryModal = lazy(() => import("./components/InventoryModal"));
 const TechniciansModal = lazy(() => import("./components/TechniciansModal"));
 const SlaSettingsModal = lazy(() => import("./components/SlaSettingsModal"));
-const CycleTimeAnalyticsModal = lazy(() => import("./components/CycleTimeAnalyticsModal"));
 
 // Estados que NO cuentan como "activos en taller"
 const ESTADOS_INACTIVOS = ["LISTO_PARA_RETIRAR", "NO_APROBADO"];
@@ -108,7 +107,6 @@ export default function AdminDashboard() {
 
   const [showModal, setShowModal] = useState(false);
   const [showSlaSettings, setShowSlaSettings] = useState(false);
-  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [createdTicket, setCreatedTicket] = useState(null);
   const [isPending, startTransition] = useTransition();
   const [exactDate, setExactDate] = useState("");
@@ -212,7 +210,7 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div className="nav-pill-actions">
-          <button className="btn-secondary" onClick={() => setShowAnalyticsModal(true)}>
+          <button className="btn-secondary" onClick={() => navigate("/admin/metricas")}>
             <BarChart3 size={16} className="inline-icon" /> Métricas y Tiempos
           </button>
           <button className="btn-secondary" onClick={() => setShowSlaSettings(true)}>
@@ -501,7 +499,6 @@ export default function AdminDashboard() {
 
       <Suspense fallback={<div className="modal-overlay"><div className="spinner" /></div>}>
         {showModal && <NewTicketModal onClose={() => setShowModal(false)} onCreated={handleTicketCreated} />}
-        {showAnalyticsModal && <CycleTimeAnalyticsModal onClose={() => setShowAnalyticsModal(false)} />}
         {showSlaSettings && <SlaSettingsModal onClose={() => setShowSlaSettings(false)} />}
         {showInventory && <InventoryModal onClose={() => setShowInventory(false)} />}
         {showTechnicians && <TechniciansModal onClose={() => setShowTechnicians(false)} />}

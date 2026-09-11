@@ -8,6 +8,7 @@ import ProtectedRoute from "./components/guards/ProtectedRoute";
 import PublicRoute from "./components/guards/PublicRoute";
 
 const AdminDashboard = lazy(() => import("./features/admin/AdminDashboard"));
+const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 const TechnicianDashboard = lazy(() => import("./features/technician/TechnicianDashboard"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -89,6 +90,17 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        {/* Architectural note (ADR-001): Dedicated route for analytics enables clean future feature gating
+            via Route Guard (<PlanGuard requiredFeature="cycle_analytics">) or upgrade paywall
+            without conditional modal nesting inside AdminDashboard. */}
+        <Route
+          path="/admin/metricas"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminAnalyticsPage />
             </ProtectedRoute>
           }
         />

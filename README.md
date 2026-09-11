@@ -20,6 +20,19 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Analítica de Tiempos de Ciclo y Cuellos de Botella:** Endpoint y modal interactivo (`GET /tickets/analytics/cycle-times`) para monitorear Lead Time promedio, Cycle Time activo, desglose por etapa, porcentaje de cumplimiento de SLA y detección automática de cuellos de botella.
 - **Ergonomía Desktop Calibrada (1500px):** Contenedor centralizado (`.workbench-canvas`) optimizado para evitar dispersión horizontal en pantallas panorámicas, preservando la adaptabilidad fluida en tablets y móviles.
 
+### 📊 Analítica Operativa y KPIs Ejecutivos de Negocio (`/admin/metricas`)
+- **Arquitectura de Ruta Dedicada (ADR-001):** Desacoplamiento total del workbench operativo de despacho diario mediante una vista dedicada `/admin/metricas` (`AdminAnalyticsPage`), lista para feature-gating declarativo sin sobrecargar componentes de intake.
+- **Tiempos de Ciclo y Detección de Cuellos de Botella:** Pestaña especializada (`GET /tickets/analytics/cycle-times`) con cálculo de Lead Time promedio, Cycle Time activo en banco, desglose de permanencia por etapa y porcentaje de cumplimiento SLA contra umbrales personalizados del taller.
+- **Motor de 7 KPIs Ejecutivos de Negocio (ADR-002):** Pestaña "Flota, Repuestos y Clientes" (`GET /tickets/analytics/business-insights`):
+  1. *Ranking de Marcas y Modelos:* Volumen de admisión por fabricante con desglose de sus modelos principales.
+  2. *Tasa de Reparación Confirmada:* Efectividad de conversión por marca (`EN_REPARACION`, `ESPERANDO_REPUESTO`, `LISTO_PARA_RETIRAR`) excluyendo del denominador los tickets rechazados (`NO_APROBADO`).
+  3. *Repuestos con Mayor Rotación:* Ranking de componentes más consumidos, frecuencia de uso, facturación y cruce de existencias en tiempo real.
+  4. *Fidelidad de Clientes (2+ Equipos):* Tasa de recurrencia del taller y listado de clientes leales con enmascaramiento defensivo de PII (`maskPhone`, `maskEmail`).
+  5. *Rendimiento de Técnicos:* Seguimiento de productividad técnica (equipos resueltos `LISTO_PARA_RETIRAR` vs en banco y tasa de completitud).
+  6. *Estructura de Margen Bruto:* Desglose financiero de ingresos por mano de obra vs repuestos, costo de adquisición y rentabilidad neta estimada.
+  7. *Alertas de Repuestos Críticos:* Monitoreo proactivo de piezas de alta rotación con existencias en o por debajo del umbral mínimo de seguridad (`low_stock_alert`) o agotadas.
+- **Selectores de Período y Caché Inteligente:** Filtros temporales en 7, 30 y 90 días gestionados concurrentemente mediante TanStack React Query con política `staleTime: 2 min`.
+
 ### 👨‍🔧 Portal de Técnico & Mesa de Trabajo Dedicada (`/tech`)
 - **Experiencia Operativa para el Técnico:** Enrutamiento inteligente por rol (`/tech` vs `/admin`), pestañas dedicadas de "Mis Asignaciones" y "Equipos Disponibles" con auto-asignación en 1 clic (`POST /tickets/{id}/assign-me`).
 - **Generación de Acceso a Técnicos:** Provisión de cuentas de acceso con credenciales temporales despachadas automáticamente vía Resend (`POST /technicians/{id}/access`) y gestión en `TechniciansModal`.
@@ -118,18 +131,19 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 162 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 185 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
-│       ├── api/              # Clientes HTTP (authFetch, tickets, diagnostic, technician, adminAssistant)
+│       ├── api/              # Clientes HTTP (authFetch, tickets, ticketAnalytics, diagnostic, etc.)
 │       ├── components/       # Componentes globales y protectores de ruta (ProtectedRoute)
 │       ├── context/          # ThemeContext (Modo Claro/Oscuro OKLCH)
 │       ├── features/
-│       │   ├── admin/        # Módulo administrativo Workbench, analítica y asistente Ohm
+│       │   ├── admin/        # Módulo administrativo Workbench y asistente Ohm
+│       │   ├── analytics/    # Módulo de analítica: tiempos de ciclo y 7 KPIs de negocio
 │       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
-│       ├── pages/            # Login, Registro y Páginas públicas
-│       ├── tests/            # 149 tests con Vitest y Testing Library (20 suites)
+│       ├── pages/            # Login, Registro, AdminAnalyticsPage y Páginas públicas
+│       ├── tests/            # 155 tests con Vitest y Testing Library (21 suites)
 │       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
 │       ├── App.css           # Estilos Workbench y temas OKLCH
 │       └── App.jsx           # Rutas y enrutador principal
@@ -245,7 +259,7 @@ La suite de backend valida modelos, servicios, guards de seguridad, cálculo de 
 cd backend
 source .venv/bin/activate
 
-# Ejecutar todos los tests (180+ tests pasando al 100%)
+# Ejecutar todos los tests (185 tests pasando al 100%)
 pytest
 
 # Ejecutar suite con reporte de cobertura
@@ -257,12 +271,12 @@ pytest tests/integration/
 
 ### Tests del Frontend (Vitest + Testing Library)
 
-La suite de frontend prueba componentes visuales, interactividad del Workbench Kanban, modales de configuración de SLAs, analíticas de tiempos de ciclo, validación móvil ecuatoriana, sanitización client-side y utilidades:
+La suite de frontend prueba componentes visuales, interactividad del Workbench Kanban, modales de configuración de SLAs, analíticas de tiempos de ciclo y 7 KPIs ejecutivos, validación móvil ecuatoriana, sanitización client-side y utilidades:
 
 ```bash
 cd frontend
 
-# Ejecutar todos los tests (149 tests pasando al 100% en 20 suites)
+# Ejecutar todos los tests (155 tests pasando al 100% en 21 suites)
 npm test
 
 # Ejecutar con reporte de cobertura

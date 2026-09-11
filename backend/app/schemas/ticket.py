@@ -338,6 +338,98 @@ class CycleTimeAnalyticsResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Workshop Business Insights Schemas (7 Executive KPIs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ModelIntakeMetric(BaseModel):
+    model: str
+    count: int
+
+
+class BrandIntakeMetric(BaseModel):
+    brand: str
+    total_tickets: int
+    percentage: float
+    top_models: list[ModelIntakeMetric]
+
+
+class BrandRepairRateMetric(BaseModel):
+    brand: str
+    total_tickets: int
+    confirmed_repairs: int
+    rejected_repairs: int
+    repair_rate: float
+
+
+class TopPartRotationMetric(BaseModel):
+    item_name: str
+    units_used: int
+    times_used: int
+    total_revenue: float
+    inventory_id: uuid.UUID | None = None
+    current_stock: int | None = None
+    is_low_stock: bool | None = None
+
+
+class RecurringCustomerItem(BaseModel):
+    customer_id: uuid.UUID
+    full_name: str
+    phone_number: str
+    email: str
+    ticket_count: int
+
+
+class CustomerRecurrenceMetrics(BaseModel):
+    total_customers: int
+    recurring_customers_count: int
+    recurrence_rate: float
+    top_recurring_customers: list[RecurringCustomerItem]
+
+
+class TechnicianPerformanceMetric(BaseModel):
+    technician_id: uuid.UUID
+    technician_name: str
+    resolved_count: int
+    active_in_bench_count: int
+    total_assigned: int
+    completion_rate: float
+
+
+class GrossMarginMetrics(BaseModel):
+    labor_revenue: float
+    parts_revenue: float
+    parts_cost: float
+    parts_margin: float
+    total_revenue: float
+    estimated_gross_profit: float
+    margin_percentage: float
+    labor_percentage: float
+    parts_percentage: float
+
+
+class CriticalPartAlertMetric(BaseModel):
+    inventory_id: uuid.UUID
+    item_name: str
+    sku: str | None = None
+    current_stock: int
+    low_stock_alert: int
+    units_used_in_period: int
+    alert_level: str
+
+
+class BusinessInsightsResponse(BaseModel):
+    """Respuesta con los 7 KPIs de flota, repuestos, clientes y rendimiento."""
+    time_window_days: int
+    brand_intake_ranking: list[BrandIntakeMetric]
+    brand_repair_rates: list[BrandRepairRateMetric]
+    top_parts_rotation: list[TopPartRotationMetric]
+    customer_recurrence: CustomerRecurrenceMetrics
+    technician_performance: list[TechnicianPerformanceMetric]
+    gross_margin: GrossMarginMetrics
+    critical_stock_alerts: list[CriticalPartAlertMetric]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Ohm Controlled Diagnostic Flow Schemas
 # ═══════════════════════════════════════════════════════════════════════════════
 

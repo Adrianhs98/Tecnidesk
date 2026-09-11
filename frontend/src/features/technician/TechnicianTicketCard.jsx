@@ -33,7 +33,15 @@ export default function TechnicianTicketCard({
           <span className="tech-card-brand">{ticket.device_brand}</span>
           <span className="tech-card-model">{ticket.device_model}</span>
         </div>
-        <div className="tech-card-badges">
+        <StatusBadge status={ticket.status} />
+      </div>
+
+      <div className="tech-card-body">
+        <div className="tech-card-tracking">
+          <span className="mono">#{ticket.tracking_token || ticket.id?.slice(0, 8)}</span>
+          <span className="tech-card-age">
+            <Clock size={12} /> {formatRelativeAge(ticket.created_at)}
+          </span>
           <span
             className={`tech-sla-badge ${isOverdue ? "overdue" : "ontime"}`}
             title={isOverdue ? "Tiempo de SLA excedido" : "Dentro del tiempo de SLA"}
@@ -47,16 +55,6 @@ export default function TechnicianTicketCard({
                 <CheckCircle2 size={12} /> A tiempo
               </>
             )}
-          </span>
-          <StatusBadge status={ticket.status} />
-        </div>
-      </div>
-
-      <div className="tech-card-body">
-        <div className="tech-card-tracking">
-          <span className="mono">#{ticket.tracking_token || ticket.id?.slice(0, 8)}</span>
-          <span className="tech-card-age">
-            <Clock size={12} /> {formatRelativeAge(ticket.created_at)}
           </span>
         </div>
 
