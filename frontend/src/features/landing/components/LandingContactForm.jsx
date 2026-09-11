@@ -81,10 +81,10 @@ export default function LandingContactForm() {
         <div className="landing-section-header">
           <div className="landing-badge">Postulación al Piloto</div>
           <h2 className="landing-title">
-            Postula tu taller para la prueba en Guayaquil y Santa Elena
+            Postula tu taller — vamos personalmente a Guayaquil o Santa Elena a dejarlo funcionando contigo el mismo día.
           </h2>
           <p className="landing-desc">
-            Completa los datos de tu taller. Nos pondremos en contacto directo contigo para coordinar el mes bonificado y la puesta en marcha.
+            Completa los datos de tu taller. Coordinamos la visita directa a tu local para la puesta en marcha inicial y tu primer mes 100% bonificado.
           </p>
         </div>
 
