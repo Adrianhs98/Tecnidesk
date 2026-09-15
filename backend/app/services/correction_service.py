@@ -16,6 +16,8 @@ from app.models.ticket import Ticket
 from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageResponse, ConfirmCorrectionIn, DiagnosticCaseResponse
 from app.services.embedding_service import EmbeddingService
 from app.services.model_router import ModelRouter
+from app.services.llm_gateway import generate_llm_content
+from app.services.tavily_service import search_technical_web
 from app.services.ai_safety_service import (
     classify_message_safety,
     log_ai_security_event,
@@ -120,36 +122,55 @@ class CorrectionService:
         ticket_res = await db.execute(ticket_stmt)
         ticket = ticket_res.scalar_one_or_none()
         
+        sources = []
+        if message_in.deep_research:
+            device_query_context = f"{ticket.device_brand} {ticket.device_model}" if ticket else ""
+            sources = await search_technical_web(
+                query=message_in.message,
+                device_context=device_query_context,
+            )
+
         route = ModelRouter.select(message_in.message, ticket_context=True, prior_messages=messages[:-1])
+        chosen_tier = "reasoning" if message_in.deep_research else route.route
+        chosen_max_tokens = 700 if message_in.deep_research else route.max_output_tokens
+
         history = "\n".join(f"{msg.role}: {msg.content[:800]}" for msg in messages[-8:])
         device_context = f"Device: {ticket.device_brand} {ticket.device_model}. Symptom: {ticket.issue_description}." if ticket else ""
+
+        web_context_prompt = ""
+        if sources:
+            web_context_prompt = (
+                "\nVerified Technical Web Findings (Schematics & Community Fixes):\n"
+                + "\n".join(f"- {s['title']}: {s['content']}" for s in sources)
+                + "\nUse this technical web information to provide deeper, precise troubleshooting steps.\n"
+            )
+
         prompt = (
             "You are Ohm, a repair technician assistant. Give concise, actionable steps. "
             "Do not repeat the ticket context.\n"
             f"{ANTI_INJECTION_SYSTEM_INSTRUCTION}\n"
             f"{device_context}\n"
+            f"{web_context_prompt}"
             f"Recent chat:\n{history}\n"
             f"{SANDWICH_PROMPT_REMINDER}"
         )
             
-        settings = get_settings()
-        client = genai.Client(api_key=settings.gemini_api_key)
-        
-        # Retry with exponential backoff for 503 ServerError
+        resolved_model = route.model
         retries = 3
         backoff_delays = [1.0, 2.0, 4.0]
-        response = None
+        llm_res = None
         for attempt in range(retries):
             try:
-                response = await client.aio.models.generate_content(
-                    model=route.model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=route.max_output_tokens)
+                llm_res = await generate_llm_content(
+                    prompt=prompt,
+                    tier=chosen_tier,
+                    temperature=0.0,
+                    max_output_tokens=chosen_max_tokens,
                 )
                 break
             except Exception as e:
                 is_503 = (
-                    (isinstance(e, errors.APIError) and e.code == 503)
+                    (isinstance(e, errors.APIError) and getattr(e, "code", None) == 503)
                     or getattr(e, "code", None) == 503
                     or getattr(e, "status_code", None) == 503
                     or "503" in str(e)
@@ -163,16 +184,25 @@ class CorrectionService:
                     ai_reply = "Servicio de Ohm no disponible temporalmente por alta demanda (503). Por favor intenta de nuevo en unos momentos."
                     break
                 else:
-                    raise e
+                    logger.error(f"Error generating diagnostic message: {e}")
+                    ai_reply = f"Servicio de Ohm no disponible temporalmente: {str(e)}"
+                    break
         else:
-            if response is None:
+            if llm_res is None:
                 ai_reply = "Servicio de Ohm no disponible temporalmente por alta demanda (503). Por favor intenta de nuevo en unos momentos."
             else:
-                ai_reply = response.text or "I understand. Let's adjust the diagnosis."
+                ai_reply = llm_res.text or "I understand. Let's adjust the diagnosis."
 
-        if response is not None:
-            ai_reply = response.text or "I understand. Let's adjust the diagnosis."
+        if llm_res is not None:
+            ai_reply = llm_res.text or "I understand. Let's adjust the diagnosis."
+            resolved_model = llm_res.model_used
         
+        if sources:
+            sources_footer = "\n\n---\n**Fuentes consultadas:**\n" + "\n".join(
+                f"- [{s['title']}]({s['url']})" for s in sources
+            )
+            ai_reply = f"{ai_reply.rstrip()}{sources_footer}"
+
         asst_msg = DiagnosticMessage(
             conversation_id=conv.id,
             role="assistant",
@@ -187,8 +217,9 @@ class CorrectionService:
             role=asst_msg.role,
             content=asst_msg.content,
             created_at=asst_msg.created_at,
-            model_route=route.route,
-            model=route.model,
+            model_route=chosen_tier,
+            model=resolved_model,
+            sources=sources if sources else None,
         )
 
     @staticmethod
@@ -323,44 +354,32 @@ class CorrectionService:
             f"6. Entrega directamente el texto del diagnóstico sin preámbulos, títulos ni despedidas meta."
         )
 
-        retries = 3
-        backoff_delays = [1, 2, 4]
         ai_text = None
-
-        for attempt in range(retries):
-            try:
-                response = await client.aio.models.generate_content(
-                    model=settings.gemini_reasoning_model,
-                    contents=synthesis_prompt,
+        try:
+            llm_res = await generate_llm_content(
+                prompt=synthesis_prompt,
+                tier="reasoning",
+            )
+            ai_text = llm_res.text.strip() if llm_res and llm_res.text else None
+        except Exception as e:
+            is_503 = (
+                (isinstance(e, errors.APIError) and getattr(e, "code", None) == 503)
+                or getattr(e, "code", None) == 503
+                or getattr(e, "status_code", None) == 503
+                or "503" in str(e)
+            )
+            if is_503:
+                logger.error(f"Gemini 503 Service Unavailable for diagnostic synthesis: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Ohm no está disponible temporalmente por alta demanda (503). Intenta de nuevo en unos momentos."
                 )
-                ai_text = response.text.strip() if response and response.text else None
-                if ai_text:
-                    break
-            except Exception as e:
-                is_503 = (
-                    (isinstance(e, errors.APIError) and e.code == 503)
-                    or getattr(e, "code", None) == 503
-                    or getattr(e, "status_code", None) == 503
-                    or "503" in str(e)
+            else:
+                logger.error(f"Error calling Gemini for diagnostic synthesis: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Error al generar diagnóstico con Ohm: {str(e)}"
                 )
-                if is_503 and attempt < retries - 1:
-                    logger.warning(
-                        f"Gemini 503 Service Unavailable on synthesis attempt {attempt + 1}/{retries}. "
-                        f"Retrying in {backoff_delays[attempt]}s..."
-                    )
-                    await asyncio.sleep(backoff_delays[attempt])
-                elif is_503:
-                    logger.error(f"Gemini 503 Service Unavailable exhausted all {retries} retries for diagnostic synthesis.")
-                    raise HTTPException(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail="Ohm no está disponible temporalmente por alta demanda (503). Intenta de nuevo en unos momentos."
-                    )
-                else:
-                    logger.error(f"Error calling Gemini for diagnostic synthesis: {e}")
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Error al generar diagnóstico con Ohm: {str(e)}"
-                    )
 
         if not ai_text:
             raise HTTPException(

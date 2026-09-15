@@ -4,19 +4,27 @@ import ThemeToggle from "../../components/shared/ThemeToggle";
 
 export default function LandingLayout({ children }) {
   return (
-    <div className="landing-page-root">
+    <div className="landing-page-root" id="top">
       {/* ─── Sticky Glass Navbar ────────────────────────────────────────── */}
       <header className="landing-navbar">
         <div className="landing-container">
           <div className="landing-nav-inner">
-            <Link to="/page" className="landing-nav-logo-link" aria-label="TecniDesk Inicio">
+            <a
+              href="#top"
+              className="landing-nav-logo-link"
+              aria-label="TecniDesk Inicio"
+              onClick={(e) => {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
               <LogoBadge businessName="TecniDesk" subtitle="Piloto 2026" />
-            </Link>
+            </a>
 
             <nav className="landing-nav-links">
-              <a href="#solucion" className="landing-nav-link">Solución</a>
-              <a href="#ohm" className="landing-nav-link">Ohm IA</a>
-              <a href="#workbench" className="landing-nav-link">Workbench</a>
+              <a href="#solucion" className="landing-nav-link">El Taller Real</a>
+              <a href="#workbench" className="landing-nav-link">Workbench Demo</a>
+              <a href="#ohm" className="landing-nav-link">Ohm Copiloto</a>
               <a href="#piloto" className="landing-nav-link">Programa Piloto</a>
             </nav>
 

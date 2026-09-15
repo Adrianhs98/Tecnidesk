@@ -119,6 +119,7 @@ from app.schemas.diagnostic import DiagnosticMessageIn, DiagnosticMessageRespons
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.technician import Technician
 from app.services.model_router import ModelRouter
+from app.services.llm_gateway import generate_llm_content
 from app.services.ai_safety_service import (
     classify_message_safety,
     log_ai_security_event,
@@ -196,14 +197,16 @@ async def workshop_diagnostic_chat(
         f"{SANDWICH_PROMPT_REMINDER}"
     )
 
+    resolved_model = route.model
     try:
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = await client.aio.models.generate_content(
-            model=route.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=route.max_output_tokens),
+        llm_res = await generate_llm_content(
+            prompt=prompt,
+            tier=route.route,
+            temperature=0.2,
+            max_output_tokens=route.max_output_tokens,
         )
-        ai_reply = response.text or "No se pudo generar una respuesta de Ohm en este momento."
+        ai_reply = llm_res.text or "No se pudo generar una respuesta de Ohm en este momento."
+        resolved_model = llm_res.model_used
     except Exception as exc:
         ai_reply = f"Servicio de Ohm no disponible temporalmente: {str(exc)}"
 
@@ -213,5 +216,6 @@ async def workshop_diagnostic_chat(
         content=ai_reply,
         created_at=datetime.now(timezone.utc),
         model_route=route.route,
-        model=route.model,
+        model=resolved_model,
     )
+

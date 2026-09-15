@@ -8,16 +8,36 @@ export default function LandingHero() {
           <div>
             <div className="landing-announcement">
               <span className="landing-announcement-dot" />
-              <span>Convocatoria Abierta • Guayaquil y Santa Elena</span>
+              <span>Convocatoria Piloto 2026 • Guayaquil y Santa Elena</span>
             </div>
 
             <h1 className="landing-hero-title">
-              Estamos seleccionando talleres de Guayaquil y Santa Elena para la{" "}
-              <span className="landing-highlight">prueba piloto</span> de TecniDesk.
+              El sistema operativo para tu{" "}
+              <span className="landing-highlight">taller de reparación tecnológica</span>.
             </h1>
 
+            {/* High-Hierarchy Offer Banner */}
+            <div className="landing-hero-offer-card">
+              <div className="landing-hero-offer-header">
+                <span className="landing-hero-offer-pill">PROGRAMA PILOTO EXCLUSIVO</span>
+                <span className="landing-hero-offer-city">Guayaquil • Santa Elena</span>
+              </div>
+              <div className="landing-hero-offer-body">
+                <div className="landing-hero-offer-price-row">
+                  <span className="landing-hero-offer-amount">$0</span>
+                  <div className="landing-hero-offer-amount-text">
+                    <strong>Primer mes 100% bonificado</strong>
+                    <span>Sin contratos forzosos • Acompañamiento directo</span>
+                  </div>
+                </div>
+                <p className="landing-hero-offer-note">
+                  Vamos directamente a tu local a configurar técnicos, inventario y dejar tu mesón de trabajo operando con el sistema.
+                </p>
+              </div>
+            </div>
+
             <p className="landing-hero-subtitle">
-              El sistema operativo para talleres de reparación que erradica el caos en el banco de trabajo, protege los datos de tus clientes con PINs cifrados y automatiza el seguimiento en tiempo real.
+              Elimina libretas y chats desordenados. Gestiona tickets con semáforos de SLA, protege los PINs de tus clientes con cifrado Fernet y utiliza a Ohm, el copiloto que recuerda las fallas y soluciones de tu propio taller.
             </p>
 
             <div className="landing-hero-actions">
@@ -29,12 +49,18 @@ export default function LandingHero() {
                 </svg>
               </a>
 
-              <a href="#solucion" className="landing-btn landing-btn-secondary landing-btn-lg">
-                Ver cómo funciona
+              <a href="#workbench" className="landing-btn landing-btn-secondary landing-btn-lg">
+                Ver demostración en vivo
               </a>
             </div>
 
             <div className="landing-trust-chips">
+              <div className="landing-chip-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Onboarding guiado</span>
+              </div>
               <div className="landing-chip-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
@@ -45,18 +71,18 @@ export default function LandingHero() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span>Alertas SLA dinámicas</span>
+                <span>Cifrado Fernet de PINs</span>
               </div>
               <div className="landing-chip-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span>Copiloto Ohm con RAG</span>
+                <span>Copiloto Ohm con RAG local</span>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Interactive CSS Workbench Mockup */}
+          {/* Right Column: Workbench Live Preview Card */}
           <div>
             <div className="landing-mockup-card">
               <div className="landing-mockup-topbar">
@@ -66,66 +92,64 @@ export default function LandingHero() {
                   <div className="landing-mockup-dot" />
                 </div>
                 <div className="landing-mockup-title">
-                  tecnidesk.app/demo/workbench
+                  tecnidesk.app/workbench • Banco Activo
                 </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--color-accent)", fontWeight: 600 }}>
-                  ● Vista previa de la interfaz
+                <div className="landing-mockup-live-status">
+                  <span className="landing-pulse-indicator" />
+                  <span>En vivo</span>
                 </div>
               </div>
 
               <div className="landing-mockup-body">
-                {/* Ticket Item 1 */}
+                {/* Ticket Item 1: MacBook in inspection with Ohm reference */}
                 <div className="landing-mockup-ticket">
                   <div className="landing-mockup-ticket-header">
-                    <span>Caso Demo • Laptop 15"</span>
-                    <span style={{ color: "var(--color-warning)", fontWeight: 700 }}>Alerta SLA: 4h restantes</span>
+                    <span className="landing-ticket-id">#TK-8041 • MacBook Air M1</span>
+                    <span className="landing-ticket-sla-warn">SLA: 2h restantes</span>
                   </div>
                   <div className="landing-mockup-ticket-device">
-                    Diagnóstico: Falla de backlight tras caída
+                    Diagnóstico: Corto en línea PP3V3_S2 tras derrame de líquido
+                  </div>
+                  <div className="landing-mockup-ticket-meta">
+                    <span className="landing-pin-tag">PIN: Cifrado Fernet [••••]</span>
+                    <span className="landing-ohm-tag">Ohm: Caso similar TK-7412</span>
                   </div>
                   <div className="landing-mockup-ticket-footer">
                     <span className="landing-mockup-badge landing-mockup-badge-revision">
                       EN REVISIÓN
                     </span>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
-                      Flujo de banco de trabajo
-                    </span>
+                    <span className="landing-mockup-tech">Técnico: Christian A.</span>
                   </div>
                 </div>
 
-                {/* Ticket Item 2 */}
+                {/* Ticket Item 2: Smartphone approved by customer */}
                 <div className="landing-mockup-ticket">
                   <div className="landing-mockup-ticket-header">
-                    <span>Caso Demo • Smartphone</span>
-                    <span style={{ color: "var(--color-success)", fontWeight: 700 }}>Aprobado online por cliente</span>
+                    <span className="landing-ticket-id">#TK-8038 • Samsung Galaxy S23</span>
+                    <span className="landing-ticket-approved">✓ Aprobado por cliente</span>
                   </div>
                   <div className="landing-mockup-ticket-device">
-                    Reparación: Cambio de módulo de pantalla
+                    Reparación: Cambio de módulo de pantalla + sellado IP68
+                  </div>
+                  <div className="landing-mockup-ticket-meta">
+                    <span className="landing-quote-tag">Presupuesto: $135.00</span>
+                    <span className="landing-parts-tag">Repuesto reservado en stock</span>
                   </div>
                   <div className="landing-mockup-ticket-footer">
                     <span className="landing-mockup-badge landing-mockup-badge-reparacion">
                       EN REPARACIÓN
                     </span>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
-                      Trazabilidad de repuestos
-                    </span>
+                    <span className="landing-mockup-tech">Técnico: Roberto M.</span>
                   </div>
                 </div>
 
-                {/* Micro Callout for Customer Portal */}
-                <div style={{
-                  backgroundColor: "var(--bg-canvas)",
-                  border: "1px dashed var(--border-subtle)",
-                  borderRadius: "6px",
-                  padding: "0.75rem",
-                  fontSize: "0.75rem",
-                  color: "var(--text-secondary)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}>
-                  <span>Portal de cliente: <strong>tracking/c7a10f...</strong></span>
-                  <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>WhatsApp listo</span>
+                {/* Customer Portal Link Callout */}
+                <div className="landing-mockup-portal-callout">
+                  <div>
+                    <span className="landing-portal-label">Portal de seguimiento del cliente:</span>
+                    <div className="landing-portal-url">tecnidesk.app/tracking/allvitech-8f2e</div>
+                  </div>
+                  <span className="landing-portal-badge">WhatsApp Listo</span>
                 </div>
               </div>
             </div>

@@ -11,6 +11,7 @@ from google.genai import types
 
 from app.config import get_settings
 from app.models.ai_security_event import AiSecurityEvent
+from app.services.llm_gateway import generate_llm_content
 
 logger = logging.getLogger(__name__)
 
@@ -68,24 +69,21 @@ async def classify_message_safety(
     client: Optional[genai.Client] = None,
 ) -> MessageSafetyResult:
     """
-    Classifies a technician message using the fast model (gemini-3.5-flash-lite).
+    Classifies a technician message using the fast tier.
     Returns on_topic and injection_attempt flags.
     Fails open to (on_topic=True, injection_attempt=False) on transient external errors.
     """
-    settings = get_settings()
     prompt = build_safety_classification_prompt(message)
 
     try:
-        active_client = client or genai.Client(api_key=settings.gemini_api_key)
-        response = await active_client.aio.models.generate_content(
-            model=settings.gemini_fast_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                response_mime_type="application/json",
-            ),
+        result = await generate_llm_content(
+            prompt=prompt,
+            tier="fast",
+            temperature=0.0,
+            response_mime_type="application/json",
+            client=client,
         )
-        raw_text = response.text or "{}"
+        raw_text = result.text or "{}"
         return MessageSafetyResult.model_validate_json(raw_text)
     except Exception as exc:
         logger.warning(

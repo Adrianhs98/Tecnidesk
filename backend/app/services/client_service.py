@@ -19,7 +19,13 @@ class ClientService:
 
         search = search.strip() if search else None
         if search:
-            search_term = f"%{search}%"
+            # Escape LIKE wildcards (\, %, _) to perform exact substring matching
+            escaped_search = (
+                search.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            search_term = f"%{escaped_search}%"
             query = query.where(
                 or_(
                     Customer.full_name.ilike(search_term),

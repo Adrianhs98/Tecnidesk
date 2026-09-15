@@ -59,6 +59,19 @@ class Settings(BaseSettings):
     gemini_reasoning_model: str = "gemini-3.6-flash"
     gemini_fast_max_output_tokens: int = 320
     gemini_reasoning_max_output_tokens: int = 700
+    gemini_primary_timeout_seconds: float = 8.0
+
+    # OmniRoute Fallback Configuration
+    omniroute_base_url: str = ""
+    omniroute_api_key: str = ""
+    omniroute_fast_combo: str = "ohm-fast"
+    omniroute_reasoning_combo: str = ""
+    omniroute_timeout_seconds: float = 15.0
+
+    # Tavily Web Search Configuration
+    tavily_api_key: str = ""
+    tavily_timeout_seconds: float = 2.5
+
 
     # CORS — orígenes adicionales para desarrollo local
     # Ejemplo: "http://localhost:3000,http://localhost:5173"

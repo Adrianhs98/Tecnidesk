@@ -103,6 +103,13 @@ async def test_correction_service_503_retry_success(db_session, monkeypatch):
 
     monkeypatch.setattr("app.services.correction_service.asyncio.sleep", fake_sleep)
 
+    from app.services.ai_safety_service import MessageSafetyResult
+
+    async def mock_safety(message, client=None):
+        return MessageSafetyResult(on_topic=True, injection_attempt=False)
+
+    monkeypatch.setattr("app.services.correction_service.classify_message_safety", mock_safety)
+
     message_in = DiagnosticMessageIn(message="Revisar corto en línea principal.")
     response = await CorrectionService.handle_chat_message(
         db=db_session,
@@ -142,6 +149,13 @@ async def test_correction_service_503_exhausted_fallback(db_session, monkeypatch
         pass
 
     monkeypatch.setattr("app.services.correction_service.asyncio.sleep", fake_sleep)
+
+    from app.services.ai_safety_service import MessageSafetyResult
+
+    async def mock_safety(message, client=None):
+        return MessageSafetyResult(on_topic=True, injection_attempt=False)
+
+    monkeypatch.setattr("app.services.correction_service.classify_message_safety", mock_safety)
 
     message_in = DiagnosticMessageIn(message="Revisar corto.")
     response = await CorrectionService.handle_chat_message(

@@ -11,7 +11,7 @@ export default function LandingContactForm() {
     contactName: "",
     city: "Guayaquil",
     phone: "",
-    weeklyVolume: "10-30 equipos",
+    weeklyVolume: "15-35 equipos/sem",
     notes: ""
   });
 

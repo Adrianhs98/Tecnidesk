@@ -81,7 +81,7 @@ export default function LandingPilotProgram() {
               Precio <span>Congelado</span>
             </div>
             <p className="landing-pilot-desc">
-              Tarifa estándar mensual pero con garantía vitalicia de precio fundador para los talleres del piloto.
+              Tarifa estándar mensual pero con precio fundador congelado garantizado para los talleres pioneros de la fase piloto.
             </p>
 
             <ul className="landing-pilot-features">
@@ -122,14 +122,10 @@ export default function LandingPilotProgram() {
             <h4 style={{ fontSize: "1.0625rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
               ¿Qué buscamos en un taller piloto?
             </h4>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
               Taller físico en Guayaquil o Península de Santa Elena, volumen semanal activo y ganas de trabajar con un sistema moderno.
             </p>
           </div>
-
-          <a href="#postular" className="landing-btn landing-btn-outline landing-btn-sm">
-            Ver Formulario de Postulación
-          </a>
         </div>
       </div>
     </section>

@@ -363,3 +363,142 @@ async def test_ticket_chat_injection_attempt_logs_ticket_and_returns_canned(clie
         assert events[0].event_type == "injection_attempt"
     finally:
         app.dependency_overrides.pop(subscription_guard, None)
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_chat_with_deep_research(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    """Verifies that deep_research=True triggers Tavily pre-fetch and reasoning tier."""
+    from app.models.shop import Shop
+    from app.models.customer import Customer
+    from app.core.dependencies import subscription_guard
+    from app.main import app
+    from app.services.llm_gateway import LLMResult
+    from app.services.ai_safety_service import MessageSafetyResult
+    import uuid
+    from datetime import datetime, timezone
+
+    shop_id = uuid.uuid4()
+    shop = Shop(
+        id=shop_id,
+        business_name="Deep Research Shop",
+        owner_name="Owner",
+        subdomain=f"deep-{shop_id.hex[:6]}",
+        contact_email="deep@test.com",
+        contact_whatsapp="123",
+        created_at=datetime.now(timezone.utc),
+        subscription_status="active",
+    )
+    db_session.add(shop)
+    await db_session.commit()
+
+    user = User(
+        email="tech_deep@test.com",
+        password_hash="hashed",
+        full_name="Tech Deep",
+        shop_id=shop_id,
+        role=UserRoleEnum.technician,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    tech = Technician(
+        user_id=user.id,
+        shop_id=shop_id,
+        full_name="Tech Deep",
+        contact="123456",
+    )
+    db_session.add(tech)
+    await db_session.commit()
+    await db_session.refresh(tech)
+
+    customer = Customer(shop_id=shop_id, full_name="Customer", phone_number="123", email="c@test.com")
+    db_session.add(customer)
+    await db_session.commit()
+    await db_session.refresh(customer)
+
+    ticket = Ticket(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        device_brand="Xiaomi",
+        device_model="Redmi Note 10",
+        issue_description="Corto en linea principal tras caída al agua",
+        status="EN_REVISION",
+        technician_id=tech.id,
+    )
+    db_session.add(ticket)
+    await db_session.commit()
+    await db_session.refresh(ticket)
+
+    token = create_access_token(user_id=str(user.id), shop_id=str(shop_id), role="technician")
+    app.dependency_overrides[subscription_guard] = lambda: user
+
+    # Mock safety check to pass
+    async def mock_safety(message, client=None):
+        return MessageSafetyResult(on_topic=True, injection_attempt=False)
+
+    monkeypatch.setattr("app.services.correction_service.classify_message_safety", mock_safety)
+
+    # Mock Tavily search
+    mock_sources = [
+        {
+            "title": "Diagrama de carga Redmi Note 10",
+            "url": "https://schematics.org/xiaomi/redmi-note-10",
+            "content": "Revisar línea VBUS y condensador C402 en la placa de carga.",
+        }
+    ]
+    tavily_called_with = {}
+
+    async def mock_search_technical_web(query, device_context="", max_results=3, timeout_seconds=None):
+        tavily_called_with["query"] = query
+        tavily_called_with["device_context"] = device_context
+        return mock_sources
+
+    monkeypatch.setattr("app.services.correction_service.search_technical_web", mock_search_technical_web)
+
+    # Mock LLM generation
+    llm_called_with = {}
+
+    async def mock_generate_llm_content(prompt, tier="fast", **kwargs):
+        llm_called_with["prompt"] = prompt
+        llm_called_with["tier"] = tier
+        return LLMResult(
+            text="Paso 1: Medir con multímetro el condensador C402.",
+            provider="gemini",
+            model_used="gemini-3.6-flash",
+            is_fallback=False,
+            latency_ms=120.0,
+        )
+
+    monkeypatch.setattr("app.services.correction_service.generate_llm_content", mock_generate_llm_content)
+
+    try:
+        payload = {
+            "message": "¿Cómo aislar el corto en la línea VBUS?",
+            "deep_research": True,
+        }
+        response = await client.post(
+            f"/tickets/{ticket.id}/diagnostic-chat",
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check Tavily was called with ticket device context
+        assert "Redmi Note 10" in tavily_called_with["device_context"]
+        assert "¿Cómo aislar el corto" in tavily_called_with["query"]
+
+        # Check LLM was called with tier="reasoning" and web findings in prompt
+        assert llm_called_with["tier"] == "reasoning"
+        assert "Verified Technical Web Findings" in llm_called_with["prompt"]
+        assert "Diagrama de carga Redmi Note 10" in llm_called_with["prompt"]
+
+        # Check response has sources and footer
+        assert data["model_route"] == "reasoning"
+        assert data["sources"] == mock_sources
+        assert "Fuentes consultadas:" in data["content"]
+        assert "https://schematics.org/xiaomi/redmi-note-10" in data["content"]
+    finally:
+        app.dependency_overrides.pop(subscription_guard, None)
+

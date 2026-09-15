@@ -119,6 +119,24 @@ export default function AiChatDrawer({
   const [isSending, setIsSending] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [sendMode, setSendMode] = useState("fast"); // "fast" | "reasoning"
+  const [showModeMenu, setShowModeMenu] = useState(false);
+  const modeMenuRef = useRef(null);
+
+  // Close mode menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target)) {
+        setShowModeMenu(false);
+      }
+    };
+    if (showModeMenu) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [showModeMenu]);
 
   // Dynamic loading message if request takes > 3.5s due to server-side retries
   useEffect(() => {
@@ -219,7 +237,7 @@ export default function AiChatDrawer({
       if (isAdmin) {
         response = await sendAdminAssistantQuery(userText);
       } else if (ticketContext?.id) {
-        response = await sendDiagnosticChat(ticketContext.id, userText);
+        response = await sendDiagnosticChat(ticketContext.id, userText, sendMode === "reasoning");
       } else {
         response = await sendFreeDiagnosticChat(userText);
       }
@@ -228,6 +246,7 @@ export default function AiChatDrawer({
         id: response.id || `ai-${Date.now()}`,
         role: "assistant",
         content: response.reply || response.content || response.text || "No se obtuvo respuesta de Ohm.",
+        sources: response.sources || null,
       };
 
       if (isAdmin || activeTicketIdRef.current === requestTicketId) {
@@ -397,6 +416,31 @@ export default function AiChatDrawer({
                   )}
                   <MessageContent text={m.content} />
 
+                  {/* Web Sources Accordion if sources were returned */}
+                  {isAssistant && m.sources && m.sources.length > 0 && (
+                    <details className="ai-sources-accordion" data-testid="ai-sources-accordion">
+                      <summary className="ai-sources-summary">
+                        <Globe size={13} className="ai-sources-icon" />
+                        <span>Fuentes web consultadas ({m.sources.length})</span>
+                      </summary>
+                      <ul className="ai-sources-list">
+                        {m.sources.map((src, sIdx) => (
+                          <li key={sIdx} className="ai-source-item">
+                            <a
+                              href={src.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ai-source-link"
+                            >
+                              <span className="ai-source-title">{src.title || "Documentación técnica"}</span>
+                              <span className="ai-source-url">{src.url}</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+
                   {/* Actions for Assistant replies when in Ticket Context */}
                   {isAssistant && ticketContext && m.id !== "welcome" && (
                     <div className="ai-bubble-actions">
@@ -427,6 +471,8 @@ export default function AiChatDrawer({
                 <span className="ai-thinking-label">
                   {isRetrying
                     ? "Ohm está experimentando alta demanda, reintentando conexión..."
+                    : sendMode === "reasoning" && !isAdmin && ticketContext
+                    ? "🌐 Investigando esquemáticos en la web y contrastando fuentes..."
                     : isAdmin
                     ? "Consultando métricas y consolidando datos del taller..."
                     : "Analizando esquemas y base de conocimiento..."}
@@ -549,16 +595,81 @@ export default function AiChatDrawer({
               disabled={isSending}
               data-testid="ai-chat-input"
             />
-            <button
-              type="button"
-              className="ai-send-btn"
-              onClick={() => handleSendMessage()}
-              disabled={!inputMessage.trim() || isSending}
-              aria-label="Enviar mensaje a Ohm"
-              data-testid="ai-send-btn"
-            >
-              <Send size={16} />
-            </button>
+            <div className="ai-input-actions">
+              {!isAdmin && ticketContext && (
+                <div className="ai-mode-picker-anchor" ref={modeMenuRef}>
+                  <button
+                    type="button"
+                    className={`ai-mode-pill-btn ${sendMode === "reasoning" ? "reasoning" : "fast"}`}
+                    onClick={() => setShowModeMenu((prev) => !prev)}
+                    title="Modo de respuesta de Ohm"
+                    aria-label="Seleccionar modo de respuesta"
+                    data-testid="ai-mode-pill-btn"
+                  >
+                    {sendMode === "reasoning" ? (
+                      <>
+                        <Globe size={13} className="ai-mode-pill-icon" />
+                        <span>Razonamiento</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={13} className="ai-mode-pill-icon" />
+                        <span>Rápida</span>
+                      </>
+                    )}
+                  </button>
+
+                  {showModeMenu && (
+                    <div className="ai-mode-popover" data-testid="ai-mode-popover">
+                      <div className="ai-mode-popover-header">Modo de consulta</div>
+                      <button
+                        type="button"
+                        className={`ai-mode-option ${sendMode === "fast" ? "active" : ""}`}
+                        onClick={() => {
+                          setSendMode("fast");
+                          setShowModeMenu(false);
+                        }}
+                        data-testid="mode-option-fast"
+                      >
+                        <div className="ai-mode-option-icon fast">⚡</div>
+                        <div className="ai-mode-option-info">
+                          <div className="ai-mode-option-title">Respuesta rápida</div>
+                          <div className="ai-mode-option-desc">Diagnóstico ágil con conocimiento interno</div>
+                        </div>
+                        {sendMode === "fast" && <Check size={14} className="ai-mode-check" />}
+                      </button>
+                      <button
+                        type="button"
+                        className={`ai-mode-option ${sendMode === "reasoning" ? "active" : ""}`}
+                        onClick={() => {
+                          setSendMode("reasoning");
+                          setShowModeMenu(false);
+                        }}
+                        data-testid="mode-option-reasoning"
+                      >
+                        <div className="ai-mode-option-icon reasoning">🧠</div>
+                        <div className="ai-mode-option-info">
+                          <div className="ai-mode-option-title">Razonamiento técnico</div>
+                          <div className="ai-mode-option-desc">Búsqueda web activa de esquemas y fuentes</div>
+                        </div>
+                        {sendMode === "reasoning" && <Check size={14} className="ai-mode-check" />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="ai-send-btn"
+                onClick={() => handleSendMessage()}
+                disabled={!inputMessage.trim() || isSending}
+                aria-label="Enviar mensaje a Ohm"
+                data-testid="ai-send-btn"
+              >
+                <Send size={16} />
+              </button>
+            </div>
           </div>
         </footer>
       </aside>

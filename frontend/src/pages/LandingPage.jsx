@@ -3,8 +3,9 @@ import { useTheme } from "../context/ThemeContext";
 import LandingLayout from "../features/landing/LandingLayout";
 import LandingHero from "../features/landing/components/LandingHero";
 import LandingPainRelief from "../features/landing/components/LandingPainRelief";
+import LandingWorkflowDemo from "../features/landing/components/LandingWorkflowDemo";
 import LandingOhm from "../features/landing/components/LandingOhm";
-import LandingFeatures from "../features/landing/components/LandingFeatures";
+import LandingQualitativeResults from "../features/landing/components/LandingQualitativeResults";
 import LandingPilotProgram from "../features/landing/components/LandingPilotProgram";
 import LandingContactForm from "../features/landing/components/LandingContactForm";
 import "../features/landing/landing.css";
@@ -13,7 +14,7 @@ export default function LandingPage() {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    // 1. Forzar modo claro por defecto al abrir la landing page (Scope punto 3)
+    // 1. Forzar modo claro por defecto al abrir la landing page
     if (setTheme && theme !== "light") {
       setTheme("light");
     } else {
@@ -21,11 +22,11 @@ export default function LandingPage() {
       document.documentElement.style.colorScheme = "light";
     }
 
-    // 2. Establecer título descriptivo para la landing
+    // 2. Título descriptivo para la landing
     const previousTitle = document.title;
-    document.title = "TecniDesk — Programa Piloto para Talleres | Guayaquil y Santa Elena";
+    document.title = "TecniDesk — Sistema para Talleres de Reparación Tecnológica | Piloto Guayaquil & Santa Elena";
 
-    // Scroll to top upon navigation
+    // Scroll al inicio al navegar
     window.scrollTo(0, 0);
 
     return () => {
@@ -35,11 +36,19 @@ export default function LandingPage() {
 
   return (
     <LandingLayout>
+      {/* 1. Hero con propuesta y $0 primer mes */}
       <LandingHero />
+      {/* 2. Problemas reales del taller & Transformación operativa */}
       <LandingPainRelief />
+      {/* 3. Demostración interactiva del Workbench (id="workbench") */}
+      <LandingWorkflowDemo />
+      {/* 4. Ohm: Copiloto de diagnóstico de taller (id="ohm") */}
       <LandingOhm />
-      <LandingFeatures />
+      {/* 5. Beneficios operativos cualitativos y acompañamiento */}
+      <LandingQualitativeResults />
+      {/* 6. Estructura comercial del Programa Piloto (id="piloto") */}
       <LandingPilotProgram />
+      {/* 7. Formulario de postulación con WhatsApp directo (id="postular") */}
       <LandingContactForm />
     </LandingLayout>
   );

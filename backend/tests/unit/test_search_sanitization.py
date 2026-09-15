@@ -199,3 +199,84 @@ async def test_inventory_search_sanitization(db_session):
     )
     assert res_sku.total == 1
     assert res_sku.items[0].id == i2.id
+
+
+@pytest.mark.asyncio
+async def test_client_search_wildcard_escaping(db_session):
+    shop, _ = await _seed_common(db_session)
+    c1 = Customer(
+        shop_id=shop.id,
+        full_name="User 100% Discount",
+        phone_number="0995555555",
+        email="user100@example.com",
+    )
+    c2 = Customer(
+        shop_id=shop.id,
+        full_name="User 1000 Regular",
+        phone_number="0996666666",
+        email="user1000@example.com",
+    )
+    c3 = Customer(
+        shop_id=shop.id,
+        full_name="User_Special",
+        phone_number="0997777777",
+        email="special@example.com",
+    )
+    c4 = Customer(
+        shop_id=shop.id,
+        full_name="UserXSpecial",
+        phone_number="0998888888",
+        email="xspecial@example.com",
+    )
+    db_session.add_all([c1, c2, c3, c4])
+    await db_session.flush()
+
+    service = ClientService(db_session)
+
+    # Search literal "%" should ONLY match "100%", not "1000"
+    items_pct, total_pct = await service.get_clients(shop_id=shop.id, search="100%")
+    assert total_pct == 1
+    assert items_pct[0].id == c1.id
+
+    # Search literal "_" should ONLY match "User_Special", not "UserXSpecial"
+    items_us, total_us = await service.get_clients(shop_id=shop.id, search="User_")
+    assert total_us == 1
+    assert items_us[0].id == c3.id
+
+
+@pytest.mark.asyncio
+async def test_get_clients_endpoint_search_sanitization(db_session):
+    from app.routers.clients import get_clients
+
+    shop, user = await _seed_common(db_session)
+    c1 = Customer(
+        shop_id=shop.id,
+        full_name="Erika Endara",
+        phone_number="0991122334",
+        email="erika@example.com",
+    )
+    db_session.add(c1)
+    await db_session.flush()
+
+    # Normal search via endpoint
+    res = await get_clients(
+        skip=0,
+        limit=10,
+        search="  Erika  ",
+        db=db_session,
+        current_user=user,
+    )
+    assert res.total == 1
+    assert res.items[0].full_name == "Erika Endara"
+
+    # Whitespace search via endpoint
+    res_ws = await get_clients(
+        skip=0,
+        limit=10,
+        search="     ",
+        db=db_session,
+        current_user=user,
+    )
+    assert res_ws.total == 1
+
+

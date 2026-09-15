@@ -13,10 +13,10 @@ export const diagnoseTicket = async (ticketId) => {
   return response.json();
 };
 
-export const sendDiagnosticChat = async (ticketId, message) => {
+export const sendDiagnosticChat = async (ticketId, message, deepResearch = false) => {
   const response = await authFetch(`${API_BASE}/tickets/${ticketId}/diagnostic-chat`, {
     method: 'POST',
-    body: JSON.stringify({ message })
+    body: JSON.stringify({ message, deep_research: deepResearch })
   });
   if (!response.ok) throw new Error("Error sending diagnostic chat");
   return response.json();
@@ -57,4 +57,3 @@ export const sendFreeDiagnosticChat = async (message) => {
   }
   return response.json();
 };
-

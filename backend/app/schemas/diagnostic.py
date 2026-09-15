@@ -29,6 +29,7 @@ class DiagnosticQueryLogCreate(BaseModel):
 
 class DiagnosticMessageIn(BaseModel):
     message: str
+    deep_research: bool = False
 
 class DiagnosticMessageResponse(BaseModel):
     id: UUID
@@ -37,6 +38,7 @@ class DiagnosticMessageResponse(BaseModel):
     created_at: datetime
     model_route: Optional[str] = None
     model: Optional[str] = None
+    sources: Optional[List[dict]] = None
 
 class DiagnosticConversationHistoryResponse(BaseModel):
     messages: List[DiagnosticMessageResponse]
