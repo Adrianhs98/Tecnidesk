@@ -130,9 +130,15 @@ class CorrectionService:
                 device_context=device_query_context,
             )
 
+        settings = get_settings()
         route = ModelRouter.select(message_in.message, ticket_context=True, prior_messages=messages[:-1])
         chosen_tier = "reasoning" if message_in.deep_research else route.route
-        chosen_max_tokens = 700 if message_in.deep_research else route.max_output_tokens
+        chosen_max_tokens = 1500 if message_in.deep_research else route.max_output_tokens
+        chosen_timeout = (
+            settings.gemini_deep_research_timeout_seconds
+            if message_in.deep_research
+            else settings.gemini_primary_timeout_seconds
+        )
 
         history = "\n".join(f"{msg.role}: {msg.content[:800]}" for msg in messages[-8:])
         device_context = f"Device: {ticket.device_brand} {ticket.device_model}. Symptom: {ticket.issue_description}." if ticket else ""
@@ -166,6 +172,7 @@ class CorrectionService:
                     tier=chosen_tier,
                     temperature=0.0,
                     max_output_tokens=chosen_max_tokens,
+                    timeout_seconds=chosen_timeout,
                 )
                 break
             except Exception as e:

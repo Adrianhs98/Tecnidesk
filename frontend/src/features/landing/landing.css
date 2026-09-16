@@ -1106,6 +1106,11 @@
   border-radius: 9999px;
 }
 
+[data-theme="light"] .landing-hero-offer-pill {
+  color: #ffffff;
+  background-color: var(--color-accent);
+}
+
 .landing-hero-offer-city {
   font-size: 0.75rem;
   font-weight: 700;

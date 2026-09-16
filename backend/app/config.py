@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     gemini_fast_max_output_tokens: int = 320
     gemini_reasoning_max_output_tokens: int = 700
     gemini_primary_timeout_seconds: float = 8.0
+    gemini_deep_research_timeout_seconds: float = 22.0
 
     # OmniRoute Fallback Configuration
     omniroute_base_url: str = ""

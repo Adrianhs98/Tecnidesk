@@ -153,3 +153,51 @@ async def test_json_mode_propagated_to_omniroute(mock_settings):
         assert result.text == '{"on_topic": true, "injection_attempt": false}'
         call_kwargs = mock_openai_instance.chat.completions.create.call_args.kwargs
         assert call_kwargs["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.asyncio
+async def test_gemini_max_tokens_warning_logged(mock_settings, caplog):
+    """Test that when Gemini returns finish_reason=MAX_TOKENS, a warning is logged."""
+    import logging
+    mock_gemini_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.text = "Respuesta incompleta porque"
+    mock_candidate = MagicMock()
+    mock_candidate.finish_reason = "MAX_TOKENS"
+    mock_resp.candidates = [mock_candidate]
+    mock_gemini_client.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+    with caplog.at_level(logging.WARNING):
+        result = await generate_llm_content(
+            prompt="Diagnóstico largo",
+            tier="reasoning",
+            client=mock_gemini_client,
+        )
+
+        assert result.text == "Respuesta incompleta porque"
+        assert any("Gemini output truncated: finish_reason=" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_timeout_seconds_override_respected(mock_settings):
+    """Test that timeout_seconds parameter overrides the default gemini_primary_timeout_seconds."""
+    import asyncio
+    mock_gemini_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.text = "OK"
+    mock_resp.candidates = []
+    mock_gemini_client.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+    with patch("asyncio.wait_for", wraps=asyncio.wait_for) as spy_wait_for:
+        result = await generate_llm_content(
+            prompt="Test timeout override",
+            tier="reasoning",
+            timeout_seconds=22.0,
+            client=mock_gemini_client,
+        )
+
+        assert result.text == "OK"
+        spy_wait_for.assert_called_once()
+        assert spy_wait_for.call_args.kwargs["timeout"] == 22.0
+
+

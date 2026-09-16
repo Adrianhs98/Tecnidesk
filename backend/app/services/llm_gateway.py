@@ -64,6 +64,7 @@ async def generate_llm_content(
     *,
     temperature: float = 0.0,
     max_output_tokens: Optional[int] = None,
+    timeout_seconds: Optional[float] = None,
     response_mime_type: Optional[str] = None,
     system_instruction: Optional[str] = None,
     client: Optional[genai.Client] = None,
@@ -78,6 +79,7 @@ async def generate_llm_content(
               "reasoning" (gemini-3.6-flash / omniroute_reasoning_combo).
         temperature: Sampling temperature (default 0.0).
         max_output_tokens: Token cap (defaults to tier setting if None).
+        timeout_seconds: Timeout override in seconds (defaults to gemini_primary_timeout_seconds if None).
         response_mime_type: e.g. "application/json" for structured output.
         system_instruction: Optional system instruction prompt.
         client: Optional injected google-genai Client (useful for unit tests).
@@ -91,6 +93,8 @@ async def generate_llm_content(
     else:
         primary_model = settings.gemini_fast_model
         resolved_max_tokens = max_output_tokens or settings.gemini_fast_max_output_tokens
+
+    resolved_timeout = timeout_seconds or settings.gemini_primary_timeout_seconds
 
     # 1. Primary Attempt: Google Gemini direct
     start_time = time.perf_counter()
@@ -111,9 +115,27 @@ async def generate_llm_content(
                 contents=prompt,
                 config=types.GenerateContentConfig(**config_kwargs),
             ),
-            timeout=settings.gemini_primary_timeout_seconds,
+            timeout=resolved_timeout,
         )
         latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+        if getattr(response, "candidates", None):
+            candidate = response.candidates[0]
+            finish_reason = getattr(candidate, "finish_reason", None)
+            fr_str = str(finish_reason).upper()
+            if "MAX_TOKENS" in fr_str:
+                logger.warning(
+                    f"Gemini output truncated: finish_reason={finish_reason} for tier='{tier}' "
+                    f"(max_output_tokens={resolved_max_tokens}). Output may be cut off mid-sentence.",
+                    extra={
+                        "event": "llm_max_tokens_reached",
+                        "tier": tier,
+                        "model": primary_model,
+                        "max_output_tokens": resolved_max_tokens,
+                        "finish_reason": str(finish_reason),
+                    },
+                )
+
         return LLMResult(
             text=response.text or "",
             provider="gemini",
@@ -201,7 +223,21 @@ async def generate_llm_content(
 
             content = ""
             if chat_completion.choices and chat_completion.choices[0].message:
-                content = chat_completion.choices[0].message.content or ""
+                choice = chat_completion.choices[0]
+                content = choice.message.content or ""
+                fr = getattr(choice, "finish_reason", None)
+                if fr == "length":
+                    logger.warning(
+                        f"OmniRoute output truncated: finish_reason='length' for tier='{tier}' "
+                        f"(max_tokens={resolved_max_tokens}). Output may be cut off mid-sentence.",
+                        extra={
+                            "event": "llm_max_tokens_reached",
+                            "tier": tier,
+                            "model": fallback_combo,
+                            "max_output_tokens": resolved_max_tokens,
+                            "finish_reason": "length",
+                        },
+                    )
 
             logger.info(
                 f"OmniRoute fallback succeeded for tier '{tier}' combo '{fallback_combo}' in {fallback_latency_ms:.1f}ms",
