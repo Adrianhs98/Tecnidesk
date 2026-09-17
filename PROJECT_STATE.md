@@ -15,28 +15,29 @@ El sistema cuenta con un flujo seguro de control de inquilinos (multi-tenancy) b
 
 ## 2. Estructura General del Espacio de Trabajo
 El espacio de trabajo está dividido en dos grandes directorios independientes en la raíz del proyecto:
-*   `Tecnidesk-backend/` - API REST en Python.
-*   `Tecnidesk-frontend/` - Cliente React con Vite.
+*   `backend/` - API REST en Python (FastAPI, pgvector, SQLAlchemy async).
+*   `frontend/` - Cliente React 19 con Vite 7 y Tailwind CSS v4.
 
 ---
 
-## 3. Auditoría del Backend (`Tecnidesk-backend`)
+## 3. Auditoría del Backend (`backend`)
 
 ### 3.1 Estructura de Directorios
 ```
-Tecnidesk-backend/
+backend/
 ├── app/
 │   ├── api/v1/                # Endpoint y enrutado para la API pública (tracking de tickets)
 │   ├── core/                  # Dependencias de seguridad, JWT, rate-limit y guards
 │   ├── models/                # Modelos ORM de SQLAlchemy 2.0
-│   ├── routers/               # Controladores de la API (Auth, Shops, Tickets, Health)
+│   ├── routers/               # Controladores (Auth, Shops, Tickets, Technicians, Clients, Inventory, Diagnostic, etc.)
 │   ├── schemas/               # Validaciones y serialización de datos con Pydantic v2
-│   ├── services/              # Lógica de negocio (Auth, Email, Storage, Tickets, Shops)
+│   ├── services/              # Lógica de negocio (Tickets, Diagnostic, LLM Gateway, Tavily, Safety, etc.)
 │   ├── config.py              # Configuración de entornos usando Pydantic Settings
 │   ├── database.py            # Motor de conexión a base de datos asíncrono
 │   └── main.py                # Punto de entrada principal (FastAPI, CORS, middlewares)
 ├── alembic/                   # Entorno de control de migraciones de base de datos
-├── scripts/                   # Scripts auxiliares (Seed de la BD, activación manual de tiendas)
+├── scripts/                   # Scripts auxiliares (Seed de la BD, sincronización y mantenimiento)
+├── tests/                     # 243 tests unitarios y de integración con pytest y respx
 ├── requirements.txt           # Dependencias del backend (FastAPI, asyncpg, cryptography, etc.)
 └── alembic.ini                # Configuración de Alembic
 ```
@@ -75,23 +76,27 @@ Los modelos ORM están definidos en `app/models/` y heredan de una clase base co
 
 ---
 
-## 4. Auditoría del Frontend (`Tecnidesk-frontend`)
+## 4. Auditoría del Frontend (`frontend`)
 
 ### 4.1 Estructura de Directorios
 ```
-Tecnidesk-frontend/
+frontend/
 ├── src/
-│   ├── api/                   # Configuración del endpoint base y helper fetch con auth (`authFetch.js`)
+│   ├── api/                   # Clientes HTTP con authFetch y endpoints tipados
 │   ├── components/            # Componentes globales de la app
 │   │   ├── guards/            # Protectores de rutas (`ProtectedRoute`, `PublicRoute`)
-│   │   └── shared/            # Componentes visuales comunes (Logo, Skeleton, Stepper, etc.)
+│   │   └── shared/            # Componentes visuales comunes (Logo, Skeleton, Stepper, StatusBadge, etc.)
+│   ├── context/               # ThemeContext (Modo Claro/Oscuro OKLCH)
 │   ├── features/              # Módulos específicos de la aplicación
-│   │   └── admin/             # Panel administrativo de la tienda
-│   │       ├── components/    # Tarjetas de tickets y modales para ingresar equipos/ver detalles
-│   │       └── AdminDashboard.jsx
-│   ├── pages/                 # Páginas principales de la aplicación (Home, Login, Register, Portal)
-│   ├── utils/                 # Constantes de estados, formateo de fechas y utilidades
-│   ├── App.css                # Estilos generales y variables del tema
+│   │   ├── admin/             # Panel administrativo Workbench y asistente Ohm
+│   │   ├── analytics/         # Módulo de analítica: tiempos de ciclo y 7 KPIs de negocio
+│   │   ├── landing/           # Landing comercial: Workflow 220vh, Ambient Tech y Ohm
+│   │   ├── technician/        # Portal de técnico, mesa de trabajo y copiloto Ohm
+│   │   └── tracking/          # Portal público de rastreo para clientes
+│   ├── pages/                 # Páginas principales (Home, Login, Register, Portal, AdminAnalyticsPage, LandingPage)
+│   ├── tests/                 # 164 tests con Vitest y Testing Library (23 suites)
+│   ├── utils/                 # Constantes de estados, formateo de fechas, moneda, teléfono y PII
+│   ├── App.css                # Estilos generales, Workbench y variables del tema OKLCH
 │   ├── App.jsx                # Definición de rutas y enrutador React Router
 │   ├── index.css              # Archivo de entrada de estilos Tailwind CSS
 │   └── main.tsx               # Renderizado e inicialización de la app React
@@ -281,9 +286,57 @@ El proyecto se encuentra en una etapa madura de MVP, con sus funcionalidades cor
     *   *Backend & Seguridad:* Nuevo endpoint `GET /tickets/analytics/business-insights` protegido por `admin_guard`, declarado antes de `/{ticket_id}` para evitar colisiones de ruta UUID. Esquemas tipados `BusinessInsightsResponse` en `app/schemas/ticket.py`. Aislamiento multi-tenant por `shop_id` y exclusión de tickets `NO_APROBADO` del cómputo de piezas y facturación.
     *   *Frontend & UX:* Componente `BusinessInsightsView.jsx` integrado con TanStack Query (stale time 2 min), selector de períodos (7, 30, 90 días), barras de progreso segmentadas de margen y tablas de alta densidad. `AdminAnalyticsPage.jsx` estructurado con 2 subpestañas accesibles (`tablist`/`tab`): *Tiempos de Ciclo y SLA* y *Flota, Repuestos y Clientes*. Estilos OKLCH responsive en `analytics.css`.
     *   *Verificación y Calidad:* **185 tests de backend** pasando al 100% (incluyendo pruebas unitarias dedicadas en `test_business_insights_analytics.py` y pruebas de integración REST en `test_business_insights_api.py`) y **155 tests de frontend** pasando al 100% en 21 suites de Vitest (con suite completa de tabs y KPIs en `AdminAnalyticsPage.test.jsx`).
+*   **Landing Page Comercial — Workflow Scroll-Driven de 4 Etapas (Fase 2.5) (17 de Septiembre, 2026):**
+    *   *Scroll-Driven Interactivo:* Implementación de track de 220vh en desktop (`LandingWorkflowDemo.jsx` y `landing.css`) con posicionamiento sticky y avance natural del ciclo de vida del taller (`01 Recibido` → `02 Diagnóstico` → `03 Aprobación` → `04 Listo`).
+    *   *Doble Modalidad de Interacción:* Sincronización bidireccional perfecta entre desplazamiento por scroll y selección manual por pestañas (*tabs*) accesibles (`role="tab"`), calculando offset de desplazamiento con compensación de barra de navegación para evitar saltos bruscos.
+    *   *Fidelidad Técnica del Workbench:* Sustitución de filas genéricas por tarjetas operativas elevadas con estética Workbench OKLCH, visualización de SLA perimetral, diagnóstico con desglose de multímetro y repuestos, flujo de aprobación de presupuesto por WhatsApp y retiro del equipo con evidencia fotográfica.
+    *   *Panel Derecho Contextual:* Transformación del panel secundario en una tarjeta de valor que explica el beneficio operativo directo de cada etapa para el dueño del taller.
+    *   *Mobile First Resiliente:* Desactivación del sticky en móviles y tablets (<960px) en favor de pestañas táctiles horizontales sin scroll-driven artificial ni layout shifts.
+*   **Landing Page Comercial — Ambient Tech Dinámico Global & Toast Sileo (Fase 2.7) (17 de Septiembre, 2026):**
+    *   *Red Neuronal de Partículas en Canvas:* Componente ambiental unificado [`LandingAmbientTech.jsx`](file:///frontend/src/features/landing/components/LandingAmbientTech.jsx) con fondo tecnológico dinámico de nodos y enlaces que nacen y mueren orgánicamente por proximidad, desacoplado de CSS keyframes estáticos.
+    *   *Modulación Narrativa de Intensidad:* Sistema reactivo a la posición de scroll que modula suavemente (lerp) la opacidad y velocidad de la red según la sección activa (Hero al 40%, Problema al 20%, Workflow al 35%, Ohm al 45%, Piloto al 30%).
+    *   *Densidad Calibrada & Ergonomía:* Nodos optimizados por dispositivo (30–40 en desktop, 22–28 en tablet, 12–18 en mobile) para garantizar una atmósfera tecnológica viva que no compite con la legibilidad del contenido.
+    *   *Notificación de Conversión Sileo:* Integración de `LandingToastProvider.jsx` reutilizando la librería Sileo, activado mediante trigger híbrido por intención/scroll con persistencia en `sessionStorage` para evitar spam, enlazando al formulario de postulación del Programa Piloto.
+    *   *Accesibilidad y Rendimiento:* Detección nativa de `prefers-reduced-motion` que renderiza una constelación estática sin bucle `requestAnimationFrame`, y limpieza estricta de memoria al desmontar.
+*   **Landing Page Comercial — Experiencia Interactiva de Ohm (Fase 3) (17 de Septiembre, 2026):**
+    *   *Estación de Diagnóstico en Mesón:* Reconstrucción de [`LandingOhm.jsx`](file:///frontend/src/features/landing/components/LandingOhm.jsx) pasando de una tarjeta densa y pasiva a una estación de trabajo interactiva de 4 etapas:
+        1. *01 Consulta Técnica:* Registro de caso en mesón (MacBook Air M1, placa 820-02016, línea PP3V3_S2 con 0.8V).
+        2. *02 Memoria del Taller:* Coincidencias con histórico previo del taller (Ticket #TK-7412 con 91% de similitud y #TK-6201 con sulfatación en pin 4 de U7700).
+        3. *03 Mediciones / Hallazgos:* Comparativa de multímetro en banco (~450Ω esperados vs 12Ω en corto medidos en banco).
+        4. *04 Sugerencia Técnica:* Procedimiento ordenado de 3 puntos (desoldar C3104, inspección de U7700 con alcohol isopropílico, prueba de encendido) con tiempo histórico estimado de ~40 min.
+    *   *Capitalización en Memoria del Taller:* Bloque visual explícito que evidencia cómo la resolución técnica confirmada se persiste en el historial privado del taller para alimentar futuras consultas de todo el equipo.
+    *   *Privacidad y Aislamiento Factual:* Copy estricto validado: *"Los datos de cada taller permanecen aislados de otros talleres. Ohm utiliza el historial disponible del propio taller para sus consultas."*
+    *   *Navegación y Ergonomía:* Stepper superior accesible con touch targets de 44px, navegación secuencial (*Anterior* / *Siguiente etapa* / *Reiniciar recorrido*), indicadores de progreso por puntos y altura calibrada (`min-height: 420px`) para erradicar el *layout shift*.
+    *   *Verificación y Calidad:* **164 tests de frontend** pasando al 100% en 23 suites de Vitest, build de producción exitoso (2.40s) y validación visual headless CDP en resoluciones 1920x1080, 1440x900, 1366x768, 390x844 y 412x915 sin desbordes horizontales.
 
-### 6.2 Estado del Workbench y Portal de Técnico
-*   **Módulo Workbench, Portal de Técnico, Asistente Ohm y Analítica Ejecutiva:** 100% implementados, respaldados por testing automatizado (155 tests de frontend en 21 suites y 185 tests de backend), blindaje multi-tenant, sanitización multi-capa en todos los flujos de entrada y parámetros de búsqueda, ergonomía visual desktop calibrada a 1500px, elevación OKLCH y sombras de contraste en tarjetas, enrutamiento por roles, asistente conversacional para admins con catálogo cerrado, blindaje de seguridad y anti-injection en el copiloto Ohm, ruta dedicada de analítica `/admin/metricas` con motor de 7 KPIs de negocio y tiempos de ciclo, documentado bajo los ADR-001 y ADR-002.
+*   **Sanitización de Búsqueda de Clientes (14 de Septiembre, 2026):**
+    *   *Backend & Servicios:* Normalización defensiva con `.strip()` y coerción a `None` para cadenas vacías o compuestas exclusivamente de espacios en blanco en el parámetro `search` de `ClientService.get_clients` (`GET /clients`) y `backend/app/routers/clients.py`.
+    *   *Resolución de Defectos:* Elimina falsos negativos donde búsquedas de clientes con espacios o padding residual devolvían colecciones vacías. Suite de pruebas unitarias en `backend/tests/unit/test_search_sanitization.py`. Ciclo SDD archivado en `openspec/changes/archive/2026-09-14-sanitize-client-search/`.
+*   **Gateway LLM Resiliente, Fallback a OmniRoute y Logging de Truncamiento (15 de Septiembre, 2026):**
+    *   *Backend & Arquitectura:* Creación del módulo centralizado `backend/app/services/llm_gateway.py` (`generate_llm_content`, `LLMResult`, `LLMGatewayError`) para desacoplar las llamadas de IA de los servicios de negocio.
+    *   *Enrutamiento por Tiers:* Soporte para tier `"fast"` (`gemini-3.5-flash-lite`, 320 tokens) y `"reasoning"` (`gemini-3.6-flash`, 700 tokens base).
+    *   *Fallback a OmniRoute:* Tolerancia a fallos automática hacia proxy compatible con OpenAI (`OmniRoute`) ante errores 429 (Resource Exhausted), 503 o timeouts de Gemini primario, utilizando combos configurables (`OMNIROUTE_FAST_COMBO`, `OMNIROUTE_REASONING_COMBO`).
+    *   *Detección Preventiva de Truncamiento:* Inspección de `response.candidates[0].finish_reason` en Gemini y `finish_reason == "length"` en OmniRoute; emisión de advertencia estructurada `logger.warning` con evento `llm_max_tokens_reached` para detectar agotamiento de tokens antes de reportes en producción. Pruebas unitarias en `backend/tests/unit/test_llm_gateway.py`.
+*   **Búsqueda Web Técnica (Tavily) & Deep Research en Copiloto Ohm (15 de Septiembre, 2026):**
+    *   *Backend & Integración Externa:* Creación de `backend/app/services/tavily_service.py` (`search_technical_web`) consumiendo la API de Tavily con timeout estricto (`TAVILY_TIMEOUT_SECONDS = 2.5`), recuperando diagramas de carga, esquemáticos y soluciones de comunidades técnicas.
+    *   *Contrato de Datos:* Parámetro `deep_research: bool = False` en `DiagnosticMessageIn`, inyección estructurada de hallazgos verificados en el prompt de Ohm (`web_context_prompt`) y retorno de `sources` (título y URL) anexado al pie del mensaje.
+    *   *Frontend & UX:* Switch/selector de modo de razonamiento en `AiChatDrawer.jsx` (`sendMode === "reasoning"`), permitiendo al técnico activar la búsqueda técnica web con renderizado interactivo de las fuentes citadas. Pruebas unitarias e integración en `test_tavily_service.py` y `test_diagnostic_chat_router.py`.
+*   **Landing Page V2 Comercial Orientada a Conversión (15-16 de Septiembre, 2026):**
+    *   *Optimización Mobile P0:* Compactación vertical del Hero en viewports <640px garantizando visibilidad inmediata del headline, la oferta de lanzamiento ("$0 Primer Mes / 100% Bonificado") y el CTA principal dentro del primer viewport en dispositivos 360x800 y 390x844.
+    *   *Navbar Adaptativa <380px:* Eliminación de tensiones horizontales y prevención de desbordes en pantallas pequeñas de 360px manteniendo legibilidad y acceso a controles.
+    *   *Sección de Resultados Cualitativos:* Creación del componente `LandingQualitativeResults.jsx` destacando el impacto operativo directo en los talleres.
+    *   *Ajuste de Contraste en Modo Claro:* Refinamiento de tokens OKLCH y contraste visual en elementos interactivos y badges destacados (como la burbuja de "PROGRAMA PILOTO EXCLUSIVO") en `landing.css`.
+*   **Calibración de Tokens y Timeout Aislado para Deep Research (16 de Septiembre, 2026):**
+    *   *Resolución de Truncamiento:* Elevación de `chosen_max_tokens` a **1500** para llamadas con `deep_research=True` en `correction_service.py:135`, mitigando el agotamiento de presupuesto provocado por los tokens de pensamiento interno (`thinking_process`) de Gemini 3.6 Flash.
+    *   *Timeout Aislado:* Adición de `gemini_deep_research_timeout_seconds: float = 22.0` en `app/config.py` y soporte de `timeout_seconds` opcional en `generate_llm_content`, desacoplando el flujo de investigación web del timeout general de 8.0s (`gemini_primary_timeout_seconds`) y previniendo cancelaciones espurias por `asyncio.wait_for`.
+    *   *Suite de Tests:* Pruebas unitarias en `test_deep_research_tokens.py` y `test_llm_gateway.py` validando la inyección de 1500 tokens, timeout de 22.0s y logging del warning de `MAX_TOKENS`.
+*   **Calibración de Tokens de Razonamiento Base (1500 tokens) y Timeout Primario (12.0s) (17 de Septiembre, 2026):**
+    *   *Resolución Estructural de Truncamiento:* Elevación de `gemini_reasoning_max_output_tokens` de 700 a **1500** en `app/config.py` y `ModelRouter`, dotando al tier `"reasoning"` base (sin búsqueda web) del margen suficiente para que el `thinking_process` de Gemini 3.6 Flash no agote el presupuesto en consultas técnicas complejas sobre multímetro, líneas de voltaje y PMIC.
+    *   *Calibración del Timeout Primario:* Aumento de `gemini_primary_timeout_seconds` de 8.0s a **12.0s** en `app/config.py`, otorgando margen seguro a los tiempos observados (9.37s) en razonamiento puro sin afectar al tier `"fast"` (<3s) ni entrar en conflicto con el timeout aislado de Deep Research (`GEMINI_DEEP_RESEARCH_TIMEOUT_SECONDS = 22.0`).
+    *   *Suite de Tests:* Pruebas en `test_deep_research_tokens.py` y `test_model_router.py` certificando la preservación de 1500 tokens y 12.0s en el flujo de chat estándar de razonamiento.
+
+### 6.2 Estado del Workbench, Portal de Técnico, Asistente Ohm y Landing Page
+*   **Módulo Workbench, Portal de Técnico, Asistente Ohm, Analítica Ejecutiva, Landing Page Comercial V2 y Gateway LLM Resiliente:** 100% implementados, respaldados por testing automatizado (**164 tests de frontend en 23 suites** y **243 tests de backend**), blindaje multi-tenant, sanitización multi-capa en todos los flujos de entrada y parámetros de búsqueda, ergonomía visual desktop calibrada a 1500px, elevación OKLCH y sombras de contraste en tarjetas, enrutamiento por roles, asistente conversacional para admins con catálogo cerrado, blindaje de seguridad y anti-injection en el copiloto Ohm, gateway LLM desacoplado con fallback a OmniRoute, búsqueda técnica web con Tavily, calibración de tokens y timeouts de razonamiento, ruta dedicada de analítica `/admin/metricas` con motor de 7 KPIs de negocio y tiempos de ciclo (ADR-001 y ADR-002), y Landing Page comercial de alta conversión V2 con Workflow scroll-driven de 220vh, Ambient Tech de partículas dinámicas global en Canvas, toast contextual Sileo y Estación Interactiva de Diagnóstico Ohm con memoria técnica de taller.
 
 
 

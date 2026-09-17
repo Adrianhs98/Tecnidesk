@@ -1,6 +1,6 @@
 export default function LandingHero() {
   return (
-    <section className="landing-section landing-hero">
+    <section id="hero" className="landing-section landing-hero">
       <div className="landing-hero-glow" aria-hidden="true" />
       <div className="landing-container">
         <div className="landing-hero-grid">

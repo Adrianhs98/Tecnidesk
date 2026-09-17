@@ -5,12 +5,14 @@ def test_routes_simple_and_dashboard_questions_to_fast_model():
     route = ModelRouter.select("¿Qué ticket llegó hoy?", ticket_context=False)
     assert route.route == "fast"
     assert route.model == "gemini-3.5-flash-lite"
+    assert route.max_output_tokens == 320
 
 
 def test_routes_complex_ticket_question_to_reasoning_model():
     route = ModelRouter.select("Ya probé varias veces y sigue igual el consumo del PMIC", ticket_context=True)
     assert route.route == "reasoning"
     assert route.model == "gemini-3.6-flash"
+    assert route.max_output_tokens == 1500
 
 
 def test_repeated_ticket_question_escalates_to_reasoning_model():

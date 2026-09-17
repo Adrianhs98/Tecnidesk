@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { sileo } from "sileo";
 
 // Número de WhatsApp oficial para la postulación al programa piloto
 // Formato internacional sin '+' para wa.me: 593960029253
@@ -49,6 +50,13 @@ export default function LandingContactForm() {
 
   const handleOpenWhatsApp = (e) => {
     e.preventDefault();
+    try {
+      sessionStorage.setItem("tecnidesk_pilot_form_submitted", "true");
+      sessionStorage.setItem("tecnidesk_pilot_toast_dismissed", "true");
+      sileo.clear();
+    } catch {
+      // Ignore if sessionStorage is not accessible
+    }
     const msg = generateMessage();
     const encoded = encodeURIComponent(msg);
     const url = `https://wa.me/${PILOT_WHATSAPP_RAW}?text=${encoded}`;

@@ -39,3 +39,9 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 });
+
+// jsdom does not implement HTMLCanvasElement.prototype.getContext by default;
+// provide a clean null-returning stub to avoid stderr noise during tests.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = (() => null) as any;
+}

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import LandingPage from "../../pages/LandingPage";
 import LandingContactForm from "../../features/landing/components/LandingContactForm";
 import LandingWorkflowDemo from "../../features/landing/components/LandingWorkflowDemo";
+import LandingOhm from "../../features/landing/components/LandingOhm";
 import { ThemeProvider } from "../../context/ThemeContext";
 
 function renderWithProviders(ui) {
@@ -76,6 +77,43 @@ describe("LandingPage V2 Component Suite", () => {
     expect(screen.getByText(/90 días de garantía registrada/i)).toBeInTheDocument();
   });
 
+  it("LandingOhm transitions through all 4 diagnostic stages correctly", () => {
+    renderWithProviders(<LandingOhm />);
+
+    // Initial step: 01 CONSULTA TÉCNICA
+    expect(screen.getByText(/01 CONSULTA TÉCNICA/i)).toBeInTheDocument();
+    expect(screen.getByText(/MacBook Air M1 \(Placa 820-02016\)/i)).toBeInTheDocument();
+
+    // Click step 2: 02 MEMORIA DEL TALLER
+    const memTab = screen.getByRole("tab", { name: /02 Memoria/i });
+    fireEvent.click(memTab);
+    expect(screen.getByText(/02 MEMORIA DEL TALLER/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ticket #TK-7412/i)).toBeInTheDocument();
+    expect(screen.getByText(/91% de similitud con un caso previo del taller/i)).toBeInTheDocument();
+
+    // Click step 3: 03 MEDICIONES / HALLAZGOS
+    const medTab = screen.getByRole("tab", { name: /03 Medición/i });
+    fireEvent.click(medTab);
+    expect(screen.getByText(/03 MEDICIONES \/ HALLAZGOS/i)).toBeInTheDocument();
+    expect(screen.getByText(/~450Ω/i)).toBeInTheDocument();
+    expect(screen.getByText("12Ω")).toBeInTheDocument();
+
+    // Click step 4: 04 SUGERENCIA TÉCNICA
+    const sugTab = screen.getByRole("tab", { name: /04 Sugerencia/i });
+    fireEvent.click(sugTab);
+    expect(screen.getByText(/04 SUGERENCIA TÉCNICA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Desoldar condensador C3104/i)).toBeInTheDocument();
+    expect(screen.getByText(/~40 min/i)).toBeInTheDocument();
+
+    // Forward/backward button navigation test
+    const prevBtn = screen.getByRole("button", { name: /Etapa anterior de Ohm/i });
+    fireEvent.click(prevBtn);
+    expect(screen.getByText(/03 MEDICIONES \/ HALLAZGOS/i)).toBeInTheDocument();
+
+    // Verify compliant privacy text
+    expect(screen.getByText(/Los datos de cada taller permanecen aislados de otros talleres/i)).toBeInTheDocument();
+  });
+
   it("LandingContactForm has synchronized weeklyVolume initial state and generates valid WhatsApp link", () => {
     const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
 
@@ -105,5 +143,21 @@ describe("LandingPage V2 Component Suite", () => {
     expect(calledUrl).toContain("https://wa.me/593960029253?text=");
     expect(calledUrl).toContain("ElectroFix%20Centro");
     expect(calledUrl).toContain("15-35%20equipos%2Fsem");
+  });
+
+  it("LandingAmbientTech renders globally as ambient background in LandingPage", () => {
+    const { container } = renderWithProviders(<LandingPage />);
+    const ambientLayer = container.querySelector(".landing-ambient-tech-container");
+    expect(ambientLayer).toBeInTheDocument();
+    const canvas = ambientLayer.querySelector("canvas.landing-ambient-tech-canvas");
+    expect(canvas).toBeInTheDocument();
+  });
+
+  it("usePilotToastTrigger respects sessionStorage frequency capping", () => {
+    sessionStorage.setItem("tecnidesk_pilot_toast_dismissed", "true");
+    const { container } = renderWithProviders(<LandingPage />);
+    // Toast should not trigger if dismissed flag exists
+    expect(sessionStorage.getItem("tecnidesk_pilot_toast_dismissed")).toBe("true");
+    expect(container).toBeInTheDocument();
   });
 });

@@ -54,6 +54,17 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Razonamiento Grounded con Gemini 3.6 Flash:** Generación de explicaciones técnicas estructuradas y citaciones verificadas contra alucinaciones.
 - **Human-in-the-Loop:** Panel interactivo `DiagnosticAssistPanel` que permite al técnico validar o corregir sugerencias de la IA, retroalimentando la base con casos reales validados (`real_validated`).
 
+### 🌐 Búsqueda Web Técnica (Tavily) & Deep Research en Copiloto Ohm
+- **Búsqueda Técnica Especializada:** Integración nativa con la API de Tavily (`search_technical_web`) para consultar en tiempo real diagramas de carga, esquemáticos, pinouts y soluciones comunitarias de reparación.
+- **Inyección Contextual de Hallazgos:** Inyección estructurada de fuentes técnicas verificadas directamente en el prompt del modelo de razonamiento (`gemini-3.6-flash`).
+- **Trazabilidad y Fuentes Citadas:** Anexado automático del listado de fuentes consultadas con enlaces directos para auditoría técnica por el técnico reparador.
+- **Calibración de Recursos:** Presupuesto ampliado a 1500 tokens de salida y timeout específico de 22.0s (`GEMINI_DEEP_RESEARCH_TIMEOUT_SECONDS`), garantizando espacio y tiempo suficientes para razonamiento profundo y emisión de guías paso a paso.
+
+### 🛡️ Gateway LLM Resiliente con Fallback a OmniRoute
+- **Desacoplamiento de Proveedores:** Módulo centralizado `llm_gateway.py` para desacoplar las llamadas de IA de los servicios de negocio con soporte multi-tier (`fast` para pre-clasificación/intents y `reasoning` para diagnósticos profundos).
+- **Fallback Automático:** Enrutamiento de contingencia hacia proxies compatibles con OpenAI (**OmniRoute**) ante cuotas agotadas (HTTP 429), errores 503 o timeouts de Google Gemini.
+- **Detección Preventiva de Truncamiento:** Monitoreo y logging estructurado de advertencia (`llm_max_tokens_reached`) ante respuestas cortadas por tope de tokens (`FinishReason.MAX_TOKENS` / `length`).
+
 ### 📦 Inventario y Repuestos
 - **Catálogo de Repuestos:** Control de stock, precios de costo y venta, alertas de stock bajo y eliminación lógica.
 - **Trazabilidad en Diagnósticos:** Descuento y restauración automática de existencias al vincular o desvincular repuestos a las órdenes de reparación.
@@ -82,6 +93,15 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Aprobación de Presupuestos:** El cliente puede autorizar o rechazar presupuestos en línea (con motivo de rechazo opcional).
 - **Canal Contextual de WhatsApp:** Botón directo para negociación ágil de presupuestos con el taller.
 
+### 🚀 Landing Page Comercial V2 & Experiencia Interactiva (`/page`)
+- **Optimización Mobile P0:** Hero ultra-compacto (<640px) asegurando visibilidad inmediata del headline, la oferta "$0 Primer Mes / 100% Bonificado" y el CTA principal dentro del primer viewport (360x800, 390x844).
+- **Navbar Adaptativa <380px:** Ajuste elástico sin desbordes horizontales ni colisiones de controles en pantallas móviles compactas.
+- **Workflow Scroll-Driven de 4 Etapas:** Simulación interactiva del flujo del taller con track de 220vh en desktop (`LandingWorkflowDemo`) y avance narrativo (*01 Recibido* → *02 Diagnóstico* → *03 Aprobación* → *04 Listo*), sincronizado con tabs de acceso directo y fallback táctil sin sticky en móviles.
+- **Estación de Diagnóstico Ohm:** Stepper interactivo de 4 pasos (*Consulta*, *Memoria del Taller*, *Medición en Multímetro* y *Sugerencia Técnica*) con checklist de 3 puntos, tiempo estimado (~40 min) y panel visual de capitalización en la memoria privada del taller.
+- **Ambient Tech Dinámico Global:** Atmósfera tecnológica en Canvas (`LandingAmbientTech`) con red de partículas y conexiones vivas por proximidad, modulación reactiva de intensidad por sección y soporte para `prefers-reduced-motion`.
+- **Resultados Cualitativos y Programa Piloto:** Secciones estructuradas (`LandingQualitativeResults`, `LandingPilotProgram`, `LandingContactForm`) enfocadas en conversión directa para talleres piloto.
+- **Notificación Contextual Sileo:** Toast emergente de conversión (`LandingToastProvider`) con trigger híbrido por intención de salida/scroll y control anti-spam en `sessionStorage` para postulación al Programa Piloto.
+
 ---
 
 ## Stack Tecnológico
@@ -96,7 +116,8 @@ Tecnidesk/
 - **Lenguaje y Framework:** Python 3.12+, FastAPI
 - **Base de Datos & ORM:** PostgreSQL con extensión `pgvector` (HNSW), SQLAlchemy 2.0 (asyncio) y `asyncpg`
 - **Control de Migraciones:** Alembic
-- **Inteligencia Artificial & RAG:** Google Gemini 3.6 Flash, Ollama (`nomic-embed-text-v2-moe`), `pgvector`
+- **Inteligencia Artificial & RAG:** Google Gemini 3.6 Flash / 3.5 Flash Lite, Ollama (`nomic-embed-text-v2-moe`), `pgvector`
+- **Búsqueda Web Técnica & Fallback LLM:** Tavily Search API, OmniRoute (Gateway resiliente compatible con OpenAI)
 - **Validación y Configuración:** Pydantic v2, Pydantic Settings
 - **Seguridad y Criptografía:** Fernet (`cryptography`), Bcrypt, JWT (`python-jose`)
 - **Rate Limiting:** SlowAPI (doble blindaje por user_id)
@@ -131,7 +152,7 @@ tecnidesk/
 │   │   ├── database.py       # Motor asíncrono SQLAlchemy
 │   │   └── main.py           # Entrypoint FastAPI, CORS y middleware global
 │   ├── scripts/              # Seeds y scripts de sincronización
-│   └── tests/                # 185 tests unitarios y de integración con pytest y respx
+│   └── tests/                # 243 tests unitarios y de integración con pytest y respx
 ├── frontend/
 │   └── src/
 │       ├── api/              # Clientes HTTP (authFetch, tickets, ticketAnalytics, diagnostic, etc.)
@@ -140,10 +161,11 @@ tecnidesk/
 │       ├── features/
 │       │   ├── admin/        # Módulo administrativo Workbench y asistente Ohm
 │       │   ├── analytics/    # Módulo de analítica: tiempos de ciclo y 7 KPIs de negocio
+│       │   ├── landing/      # Landing comercial: Workflow 220vh, Ambient Tech y Ohm
 │       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
 │       ├── pages/            # Login, Registro, AdminAnalyticsPage y Páginas públicas
-│       ├── tests/            # 155 tests con Vitest y Testing Library (21 suites)
+│       ├── tests/            # 164 tests con Vitest y Testing Library (23 suites)
 │       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
 │       ├── App.css           # Estilos Workbench y temas OKLCH
 │       └── App.jsx           # Rutas y enrutador principal
@@ -235,6 +257,15 @@ La aplicación estará disponible en `http://localhost:5173`.
 | `FERNET_KEY` | Clave Fernet para cifrado simétrico de PINs de dispositivos |
 | `BCRYPT_ROUNDS` | Factor de trabajo de hashing para contraseñas (10 en dev, 12 en prod) |
 | `GEMINI_API_KEY` | Clave de API de Google Gemini para diagnóstico asistido |
+| `GEMINI_PRIMARY_TIMEOUT_SECONDS` | Timeout primario para llamadas a Gemini en segundos (default: `12.0`) |
+| `GEMINI_DEEP_RESEARCH_TIMEOUT_SECONDS` | Timeout aislado para flujos de razonamiento técnico con Deep Research (default: `22.0`) |
+| `OMNIROUTE_BASE_URL` | URL base para el gateway fallback compatible con OpenAI (ej. `https://api.omniroute.ai/v1`) |
+| `OMNIROUTE_API_KEY` | Clave de API para autenticación en el proxy OmniRoute |
+| `OMNIROUTE_FAST_COMBO` | Identificador de modelo/combo para tier rápido en OmniRoute (default: `ohm-fast`) |
+| `OMNIROUTE_REASONING_COMBO` | Identificador de modelo/combo para tier de razonamiento en OmniRoute |
+| `OMNIROUTE_TIMEOUT_SECONDS` | Timeout para llamadas de fallback a OmniRoute en segundos (default: `15.0`) |
+| `TAVILY_API_KEY` | Clave de API de Tavily para búsqueda técnica web de esquemáticos y diagramas |
+| `TAVILY_TIMEOUT_SECONDS` | Timeout para consultas de búsqueda web en Tavily en segundos (default: `2.5`) |
 | `LOCAL_EMBEDDING_SERVICE_URL` | URL de Ollama (`http://localhost:11434`) para embeddings |
 | `R2_ENDPOINT` | Endpoint S3 de Cloudflare R2 |
 | `R2_ACCESS_KEY` | Access Key de Cloudflare R2 |
@@ -259,7 +290,7 @@ La suite de backend valida modelos, servicios, guards de seguridad, cálculo de 
 cd backend
 source .venv/bin/activate
 
-# Ejecutar todos los tests (185 tests pasando al 100%)
+# Ejecutar todos los tests (243 tests pasando al 100%)
 pytest
 
 # Ejecutar suite con reporte de cobertura
@@ -276,7 +307,7 @@ La suite de frontend prueba componentes visuales, interactividad del Workbench K
 ```bash
 cd frontend
 
-# Ejecutar todos los tests (155 tests pasando al 100% en 21 suites)
+# Ejecutar todos los tests (164 tests pasando al 100% en 23 suites)
 npm test
 
 # Ejecutar con reporte de cobertura

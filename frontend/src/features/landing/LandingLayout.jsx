@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
 import LogoBadge from "../../components/shared/LogoBadge";
 import ThemeToggle from "../../components/shared/ThemeToggle";
+import LandingAmbientTech from "./components/LandingAmbientTech";
 
 export default function LandingLayout({ children }) {
   return (
     <div className="landing-page-root" id="top">
+      {/* ─── Global Ambient Tech Neural Network ─────────────────────────── */}
+      <LandingAmbientTech />
+
       {/* ─── Sticky Glass Navbar ────────────────────────────────────────── */}
       <header className="landing-navbar">
         <div className="landing-container">
