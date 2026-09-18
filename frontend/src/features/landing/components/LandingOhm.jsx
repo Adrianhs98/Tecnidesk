@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const OHM_STAGES = [
   {
@@ -9,7 +9,7 @@ const OHM_STAGES = [
     stepClass: "step-query",
     meta: "Técnico en microscopio • Caso activo",
     headline: "El técnico ingresa el problema directo en el banco",
-    summary: "Se registra la placa, síntoma y comportamiento anómalo inicial sin rodeos.",
+    summary: "Esto es lo que el técnico sabe al comenzar.",
     renderContent: () => (
       <div className="landing-ohm-stage-content">
         <div className="landing-ohm-prompt-preview">
@@ -38,31 +38,55 @@ const OHM_STAGES = [
     stepClass: "step-history",
     meta: "Historial disponible consultado",
     headline: "Ohm encuentra coincidencias en reparaciones previas del taller",
-    summary: "Recupera soluciones reales que tu equipo ya documentó y resolvió con éxito.",
+    summary: "Esto es lo que el taller ya aprendió.",
     renderContent: () => (
       <div className="landing-ohm-stage-content">
-        <div className="landing-ohm-matches-list">
-          <div className="landing-ohm-match-card primary">
-            <div className="landing-ohm-match-top">
-              <span className="landing-ohm-match-id">Ticket #TK-7412</span>
-              <span className="landing-ohm-match-badge match-high">91% de similitud con un caso previo del taller</span>
-            </div>
-            <div className="landing-ohm-match-body">
-              <strong>Causa confirmada en tu taller:</strong> Corto en condensador cerámico C3104 en riel secundario tras derrame.
-            </div>
-            <div className="landing-ohm-match-footer">
-              <span>Resolución registrada hace 3 meses en tu local</span>
-            </div>
+        <div className="landing-ohm-chat-dialogue">
+          {/* Technician Query Bubble */}
+          <div className="landing-ohm-chat-bubble technician">
+            <div className="landing-ohm-chat-role">Técnico en mesón</div>
+            <p className="landing-ohm-chat-text">
+              «MacBook Air M1 (Placa 820-02016) no enciende tras mojarse. Línea PP3V3_S2 marca 0.8V en lugar de 3.3V.»
+            </p>
           </div>
 
-          <div className="landing-ohm-match-card secondary">
-            <div className="landing-ohm-match-top">
-              <span className="landing-ohm-match-id">Ticket #TK-6201</span>
-              <span className="landing-ohm-match-badge match-subtle">Coincidencia secundaria en misma placa</span>
+          {/* Ohm Assistant Response Bubble */}
+          <div className="landing-ohm-chat-bubble assistant">
+            <div className="landing-ohm-chat-header">
+              <span className="landing-ohm-chat-tag">
+                <span className="landing-ohm-tag-icon">⚡</span> Ohm
+              </span>
+              <span className="landing-ohm-chat-context-badge">
+                Memoria técnica activa
+              </span>
             </div>
-            <div className="landing-ohm-match-body">
-              Sulfatación y corrosión en pin 4 del integrado U7700.
+
+            <p className="landing-ohm-chat-text">
+              Revisé el historial de reparaciones de tu taller para la placa <strong>820-02016</strong> con caída de tensión en el riel <strong>PP3V3_S2</strong>:
+            </p>
+
+            {/* Embedded Relevant Case Card */}
+            <div className="landing-ohm-cited-case">
+              <div className="landing-ohm-cited-top">
+                <div className="landing-ohm-cited-meta-left">
+                  <span className="landing-ohm-cited-pin">📌</span>
+                  <span className="landing-ohm-match-id">Ticket #TK-7412</span>
+                </div>
+                <span className="landing-ohm-match-badge match-high">
+                  Coincidencia alta con historial del taller
+                </span>
+              </div>
+              <div className="landing-ohm-cited-body">
+                <strong>Causa confirmada en tu taller:</strong> Corto en condensador cerámico C3104 en riel secundario tras derrame líquido.
+              </div>
+              <div className="landing-ohm-cited-footer">
+                <span>Resolución registrada hace 3 meses en tu local</span>
+              </div>
             </div>
+
+            <p className="landing-ohm-chat-text">
+              Continuemos con el descarte antes de aplicar calor: verificá con multímetro en modo diodo sobre <strong>C3104</strong> para corroborar si la fuga a tierra se concentra en este componente.
+            </p>
           </div>
         </div>
 
@@ -82,7 +106,7 @@ const OHM_STAGES = [
     stepClass: "step-findings",
     meta: "Riel PP3V3_S2 • Evidencia de banco",
     headline: "El técnico corrobora con multímetro antes de desoldar",
-    summary: "Se confrontan las mediciones reales de placa con los valores esperados de referencia.",
+    summary: "Ahora el técnico contrasta el historial con lo que está midiendo.",
     renderContent: () => (
       <div className="landing-ohm-stage-content">
         <div className="landing-ohm-measurement-grid">
@@ -139,12 +163,16 @@ const OHM_STAGES = [
           </ol>
         </div>
 
+        <div className="landing-ohm-decision-note">
+          <span>⚖️ La decisión final permanece en manos del técnico.</span>
+        </div>
+
         <div className="landing-ohm-capitalization-banner">
           <div className="landing-ohm-capitalization-icon">💾</div>
           <div className="landing-ohm-capitalization-text">
             <strong>Capitalización en la memoria del taller:</strong>
             <span>
-              Al reparar el equipo, el técnico confirma la solución final y esta queda registrada permanentemente en la memoria técnica disponible del propio taller para futuras consultas.
+              Cuando una reparación confirmada se registra, puede convertirse en conocimiento reutilizable para futuras consultas del taller.
             </span>
           </div>
         </div>
@@ -154,7 +182,24 @@ const OHM_STAGES = [
 ];
 
 export default function LandingOhm() {
-  const [activeStep, setActiveStep] = useState(0);
+  const [activeStep, setActiveStep] = useState(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const stepParam = sp.get("ohm_step");
+        if (stepParam !== null) {
+          const parsed = parseInt(stepParam, 10);
+          if (!isNaN(parsed) && parsed >= 0 && parsed < OHM_STAGES.length) return parsed;
+        }
+      }
+    } catch {
+      // fallback to 0
+    }
+    return 0;
+  });
+  const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
+  const [isSpotlightVisible, setIsSpotlightVisible] = useState(false);
+  const tabRefs = useRef([]);
 
   const currentStage = OHM_STAGES[activeStep];
 
@@ -164,6 +209,54 @@ export default function LandingOhm() {
 
   const handlePrev = () => {
     setActiveStep((prev) => (prev > 0 ? prev - 1 : 0));
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash.includes("#ohm")) {
+      setTimeout(() => {
+        const el = document.getElementById("ohm");
+        if (el) el.scrollIntoView({ behavior: "instant" });
+      }, 100);
+    }
+  }, []);
+
+  // Keyboard navigation for accessible tabs (React Bits Stepper pattern)
+  const handleTabKeyDown = (e, idx) => {
+    let nextIndex = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      nextIndex = (idx + 1) % OHM_STAGES.length;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      nextIndex = (idx - 1 + OHM_STAGES.length) % OHM_STAGES.length;
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      e.preventDefault();
+      nextIndex = OHM_STAGES.length - 1;
+    }
+
+    if (nextIndex !== null) {
+      setActiveStep(nextIndex);
+      tabRefs.current[nextIndex]?.focus();
+    }
+  };
+
+  // Spotlight Card mouse move tracking (React Bits Spotlight pattern adaptation)
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+    if (!isSpotlightVisible) {
+      setIsSpotlightVisible(true);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsSpotlightVisible(false);
   };
 
   return (
@@ -225,19 +318,34 @@ export default function LandingOhm() {
               </div>
             </div>
 
-            {/* Right: Interactive Workshop Bench Diagnostic Station */}
+            {/* Right: Interactive Workshop Bench Diagnostic Station with Border Glow and Spotlight */}
             <div className="landing-ohm-bench-container">
-              <div className="landing-ohm-bench-card">
+              <div
+                className="landing-ohm-bench-card"
+                onMouseMove={handleMouseMove}
+                onMouseEnter={() => setIsSpotlightVisible(true)}
+                onMouseLeave={handleMouseLeave}
+                style={{
+                  "--spotlight-x": `${mousePos.x}px`,
+                  "--spotlight-y": `${mousePos.y}px`,
+                }}
+              >
+                {/* React Bits Spotlight Card Subtle Overlay */}
+                <div
+                  className={`landing-ohm-spotlight ${isSpotlightVisible ? "visible" : ""}`}
+                  aria-hidden="true"
+                />
+
                 {/* Station Topbar with Status and Mode */}
                 <div className="landing-ohm-bench-topbar">
                   <div className="landing-ohm-bench-title-wrap">
-                    <span className="landing-ohm-bench-status-dot" />
-                    <span className="landing-ohm-bench-title">Estación de Diagnóstico Ohm • Mesón Activo</span>
+                    <span className="landing-ohm-bench-status-dot" aria-hidden="true" />
+                    <span className="landing-ohm-bench-title">OHM COPILOTO • Memoria técnica del taller</span>
                   </div>
                   <span className="landing-ohm-bench-tag">Historial Local Conectado</span>
                 </div>
 
-                {/* Stepper Navigation */}
+                {/* Stepper Navigation (React Bits Stepper Pattern with keyboard support) */}
                 <div
                   className="landing-ohm-stepper"
                   role="tablist"
@@ -248,11 +356,14 @@ export default function LandingOhm() {
                     return (
                       <button
                         key={stage.id}
+                        ref={(el) => (tabRefs.current[idx] = el)}
                         role="tab"
                         id={`ohm-tab-${stage.id}`}
                         aria-selected={isActive}
                         aria-controls={`ohm-panel-${stage.id}`}
+                        tabIndex={isActive ? 0 : -1}
                         onClick={() => setActiveStep(idx)}
+                        onKeyDown={(e) => handleTabKeyDown(e, idx)}
                         className={`landing-ohm-tab ${isActive ? "active" : ""}`}
                       >
                         <span className="landing-ohm-tab-num">{stage.num}</span>

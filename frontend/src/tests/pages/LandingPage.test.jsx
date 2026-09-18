@@ -77,38 +77,66 @@ describe("LandingPage V2 Component Suite", () => {
     expect(screen.getByText(/90 días de garantía registrada/i)).toBeInTheDocument();
   });
 
-  it("LandingOhm transitions through all 4 diagnostic stages correctly", () => {
-    renderWithProviders(<LandingOhm />);
+  it("LandingOhm transitions through all 4 diagnostic stages correctly with a11y tabs and keyboard navigation", () => {
+    const { container } = renderWithProviders(<LandingOhm />);
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(4);
 
     // Initial step: 01 CONSULTA TÉCNICA
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    expect(tabs[1]).toHaveAttribute("aria-selected", "false");
     expect(screen.getByText(/01 CONSULTA TÉCNICA/i)).toBeInTheDocument();
     expect(screen.getByText(/MacBook Air M1 \(Placa 820-02016\)/i)).toBeInTheDocument();
 
-    // Click step 2: 02 MEMORIA DEL TALLER
-    const memTab = screen.getByRole("tab", { name: /02 Memoria/i });
-    fireEvent.click(memTab);
+    // Keyboard navigation: ArrowRight advances tab
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/02 MEMORIA DEL TALLER/i)).toBeInTheDocument();
     expect(screen.getByText(/Ticket #TK-7412/i)).toBeInTheDocument();
-    expect(screen.getByText(/91% de similitud con un caso previo del taller/i)).toBeInTheDocument();
+    expect(screen.getByText(/Coincidencia alta con historial del taller/i)).toBeInTheDocument();
+    expect(screen.getByText(/Los datos de cada taller permanecen aislados de otros talleres/i)).toBeInTheDocument();
+
+    // Keyboard navigation: End jumps to last tab (04 SUGERENCIA)
+    fireEvent.keyDown(tabs[1], { key: "End" });
+    expect(tabs[3]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/04 SUGERENCIA TÉCNICA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Desoldar condensador C3104/i)).toBeInTheDocument();
+    expect(screen.getByText(/~40 min/i)).toBeInTheDocument();
+    expect(screen.getByText(/La decisión final permanece en manos del técnico/i)).toBeInTheDocument();
+
+    // Restart button loop when at last stage
+    const restartBtn = screen.getByRole("button", { name: /Reiniciar recorrido de Ohm/i });
+    fireEvent.click(restartBtn);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/01 CONSULTA TÉCNICA/i)).toBeInTheDocument();
+
+    // Forward button ("Siguiente etapa →")
+    const nextBtn = screen.getByRole("button", { name: /Siguiente etapa de Ohm/i });
+    fireEvent.click(nextBtn);
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
 
     // Click step 3: 03 MEDICIONES / HALLAZGOS
     const medTab = screen.getByRole("tab", { name: /03 Medición/i });
     fireEvent.click(medTab);
+    expect(tabs[2]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/03 MEDICIONES \/ HALLAZGOS/i)).toBeInTheDocument();
     expect(screen.getByText(/~450Ω/i)).toBeInTheDocument();
     expect(screen.getByText("12Ω")).toBeInTheDocument();
 
-    // Click step 4: 04 SUGERENCIA TÉCNICA
-    const sugTab = screen.getByRole("tab", { name: /04 Sugerencia/i });
-    fireEvent.click(sugTab);
-    expect(screen.getByText(/04 SUGERENCIA TÉCNICA/i)).toBeInTheDocument();
-    expect(screen.getByText(/Desoldar condensador C3104/i)).toBeInTheDocument();
-    expect(screen.getByText(/~40 min/i)).toBeInTheDocument();
-
-    // Forward/backward button navigation test
+    // Backward button ("← Anterior")
     const prevBtn = screen.getByRole("button", { name: /Etapa anterior de Ohm/i });
     fireEvent.click(prevBtn);
-    expect(screen.getByText(/03 MEDICIONES \/ HALLAZGOS/i)).toBeInTheDocument();
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+
+    // Spotlight card mouse move and mouse leave test
+    const benchCard = container.querySelector(".landing-ohm-bench-card");
+    expect(benchCard).toBeInTheDocument();
+    fireEvent.mouseMove(benchCard, { clientX: 100, clientY: 150 });
+    const spotlight = container.querySelector(".landing-ohm-spotlight");
+    expect(spotlight).toHaveClass("visible");
+    fireEvent.mouseLeave(benchCard);
+    expect(spotlight).not.toHaveClass("visible");
 
     // Verify compliant privacy text
     expect(screen.getByText(/Los datos de cada taller permanecen aislados de otros talleres/i)).toBeInTheDocument();
