@@ -20,12 +20,21 @@ import { API_BASE } from "../../../api/config";
 import { formatDate } from "../../../utils/date";
 import { maskPhone, maskEmail } from "../../../utils/privacy";
 import { formatCurrency } from "../../../utils/currency";
+import { ADMIN_STATUSES } from "../../../utils/constants";
+import StatusBadge from "../../../components/shared/StatusBadge";
 import PartsSelector from "./PartsSelector";
 
 const DiagnosticModal = lazy(() => import("./DiagnosticModal"));
 
 export default function TicketDetailModal({ ticket, onClose, onStatusChange }) {
+  const [currentStatus, setCurrentStatus] = useState(ticket?.status);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusError, setStatusError] = useState(null);
   const [showPii, setShowPii] = useState(false);
+
+  useEffect(() => {
+    setCurrentStatus(ticket?.status);
+  }, [ticket?.status]);
   const [evidences, setEvidences] = useState([]);
   const [loadingEvidences, setLoadingEvidences] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -167,6 +176,34 @@ export default function TicketDetailModal({ ticket, onClose, onStatusChange }) {
     queryClient.invalidateQueries({ queryKey: ['ticketDetails', ticket.id] });
   };
 
+  const handleStatusChange = async (e) => {
+    const newStatus = e.target.value;
+    if (!newStatus || newStatus === currentStatus) return;
+    setStatusUpdating(true);
+    setStatusError(null);
+    try {
+      const res = await authFetch(`${API_BASE}/tickets/${ticket.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Error ${res.status}`);
+      }
+      const updated = await res.json();
+      setCurrentStatus(newStatus);
+      queryClient.setQueryData(['ticketDetails', ticket.id], (old) => old ? { ...old, status: newStatus } : old);
+      if (onStatusChange) {
+        onStatusChange(updated);
+      }
+    } catch (err) {
+      setStatusError(err.message || "Error al actualizar estado");
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     const handleKeyDown = (e) => {
@@ -271,6 +308,82 @@ export default function TicketDetailModal({ ticket, onClose, onStatusChange }) {
               <X size={20} />
             </button>
           </div>
+
+          {/* Status Control Bar */}
+          <div
+            style={{
+              padding: "12px 20px",
+              background: "var(--surface2)",
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--text3)",
+                }}
+              >
+                Estado:
+              </span>
+              <StatusBadge status={currentStatus} />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <select
+                value={currentStatus || ""}
+                onChange={handleStatusChange}
+                disabled={statusUpdating}
+                data-testid="admin-ticket-status-select"
+                aria-label="Cambiar estado del ticket"
+                style={{
+                  background: "var(--bg)",
+                  color: "var(--text1)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: statusUpdating ? "not-allowed" : "pointer",
+                }}
+              >
+                {ADMIN_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              {statusUpdating && (
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+              )}
+            </div>
+          </div>
+
+          {statusError && (
+            <div
+              style={{
+                padding: "8px 20px",
+                background: "rgba(239, 68, 68, 0.1)",
+                color: "var(--danger)",
+                fontSize: 12,
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <AlertTriangle size={14} />
+              <span>{statusError}</span>
+            </div>
+          )}
 
           {/* Modal Body */}
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -488,7 +601,7 @@ export default function TicketDetailModal({ ticket, onClose, onStatusChange }) {
                 Diagnóstico y Presupuesto
               </div>
 
-              {ticket.status === "EN_REVISION" && (
+              {currentStatus === "EN_REVISION" && (
                 <button
                   onClick={() => setShowDiagModal(true)}
                   style={{
@@ -548,7 +661,7 @@ export default function TicketDetailModal({ ticket, onClose, onStatusChange }) {
                   ticketId={ticket.id}
                   items={items}
                   setItems={setItems}
-                  status={ticket.status}
+                  status={currentStatus}
                   onItemsUpdated={handleItemsUpdated}
                 />
               )}

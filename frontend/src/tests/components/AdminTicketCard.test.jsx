@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminTicketCard from '../../features/admin/components/AdminTicketCard';
@@ -221,6 +221,60 @@ describe('AdminTicketCard Component', () => {
       // Now unmasked
       expect(screen.getByText('0987654321')).toBeInTheDocument();
       expect(screen.getByText('carlos@example.com')).toBeInTheDocument();
+    });
+
+    it('allows changing status directly from inside the detail modal and propagates to onStatusChange', async () => {
+      vi.useRealTimers();
+      const onStatusChange = vi.fn();
+      const defaultTicket = {
+        id: 'ticket-123',
+        tracking_token: 'TRK-987654321',
+        device_brand: 'Apple',
+        device_model: 'iPhone 13 Pro',
+        issue_description: 'Pantalla no enciende tras caída',
+        status: 'EN_REVISION',
+        created_at: '2026-08-20T16:00:00.000Z',
+        customer: { id: 'cust-1', full_name: 'Carlos Mendoza' },
+        technician: { id: 'tech-1', full_name: 'Juan Técnico' },
+      };
+
+      vi.mocked(authFetchModule.authFetch).mockImplementation(async (url, opts) => {
+        if (String(url).includes('/status') && opts?.method === 'PATCH') {
+          return {
+            ok: true,
+            json: async () => ({ ...defaultTicket, status: 'EN_REPARACION' }),
+          };
+        }
+        return { ok: true, json: async () => [] };
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AdminTicketCard ticket={defaultTicket} onStatusChange={onStatusChange} />
+        </QueryClientProvider>
+      );
+
+      // Open detail modal
+      fireEvent.click(screen.getByRole('button', { name: /Ver detalles del equipo/i }));
+
+      // Status select inside modal
+      const modalStatusSelect = screen.getByTestId('admin-ticket-status-select');
+      expect(modalStatusSelect.value).toBe('EN_REVISION');
+
+      fireEvent.change(modalStatusSelect, { target: { value: 'EN_REPARACION' } });
+
+      await waitFor(() => {
+        expect(authFetchModule.authFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/tickets/ticket-123/status'),
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'EN_REPARACION' }),
+          })
+        );
+        expect(onStatusChange).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'EN_REPARACION' })
+        );
+      });
     });
   });
 });
