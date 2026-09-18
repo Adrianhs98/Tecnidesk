@@ -20,6 +20,7 @@ from app.services.llm_gateway import generate_llm_content
 from app.services.tavily_service import search_technical_web
 from app.services.ai_safety_service import (
     classify_message_safety,
+    evaluate_web_research_intent,
     log_ai_security_event,
     CANNED_REDIRECT_RESPONSE,
     ANTI_INJECTION_SYSTEM_INSTRUCTION,
@@ -124,11 +125,21 @@ class CorrectionService:
         
         sources = []
         if message_in.deep_research:
-            device_query_context = f"{ticket.device_brand} {ticket.device_model}" if ticket else ""
-            sources = await search_technical_web(
-                query=message_in.message,
-                device_context=device_query_context,
+            should_search = evaluate_web_research_intent(
+                message=message_in.message,
+                llm_intent=safety.web_research_intent,
             )
+            if should_search:
+                device_query_context = f"{ticket.device_brand} {ticket.device_model}" if ticket else ""
+                sources = await search_technical_web(
+                    query=message_in.message,
+                    device_context=device_query_context,
+                )
+            else:
+                logger.info(
+                    "Skipping Tavily search: query lacks concrete web research intent (vague or introductory query).",
+                    extra={"query_excerpt": message_in.message[:80]},
+                )
 
         settings = get_settings()
         route = ModelRouter.select(message_in.message, ticket_context=True, prior_messages=messages[:-1])

@@ -207,8 +207,13 @@ export default function TechnicianWorkModal({
     try {
       const res = await generateDraftDiagnostic(ticket.id);
       setDraftDiagnostic(res.draft_diagnostic);
+      setDiagnosticNotes(res.draft_diagnostic);
       if (onStatusChange) {
-        onStatusChange({ ...ticket, draft_diagnostic: res.draft_diagnostic });
+        onStatusChange({
+          ...ticket,
+          draft_diagnostic: res.draft_diagnostic,
+          diagnostic_notes: res.draft_diagnostic,
+        });
       }
     } catch (err) {
       setDiagnosticError(err.message || "Error al generar diagnóstico con Ohm");

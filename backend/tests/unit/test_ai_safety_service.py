@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.services.ai_safety_service import (
     classify_message_safety,
+    evaluate_web_research_intent,
     log_ai_security_event,
     build_safety_classification_prompt,
     MessageSafetyResult,
@@ -122,3 +123,52 @@ def test_canned_response_and_instructions_integrity():
     assert "diagnósticos técnicos" in CANNED_REDIRECT_RESPONSE
     assert "redefinir tu rol" in ANTI_INJECTION_SYSTEM_INSTRUCTION
     assert "RECORDATORIO DE SEGURIDAD" in SANDWICH_PROMPT_REMINDER
+
+
+def test_evaluate_web_research_intent_vague_procedural_rejected():
+    vague_queries = [
+        "¿cómo empezamos esto?",
+        "¿qué crees que debemos empezar?",
+        "¿por dónde arrancamos?",
+        "¿Por dónde empezamos a revisar?",
+        "¿qué hacemos primero?",
+        "Hola, ¿cómo empezamos?",
+        "¿qué opinas de esto?",
+        "¿cuál es el primer paso?",
+    ]
+    for q in vague_queries:
+        assert evaluate_web_research_intent(q) is False, f"Expected False for vague query: {q}"
+
+
+def test_evaluate_web_research_intent_technical_signals_accepted():
+    technical_queries = [
+        "¿Cómo aislar el corto en la línea VBUS?",
+        "Necesito el esquema o boardview para la placa",
+        "Revisar el integrado PMIC PM6150",
+        "Falla de condensador C302 en corto",
+        "Dónde está el test point EDL en este modelo",
+        "Valores de caída de tensión en el conector de batería",
+        "El teléfono marca consumo de 0.45A en la fuente de poder",
+        "Error 4013 al restaurar en iTunes",
+        "Busca en la web si hay solución común para esta falla",
+    ]
+    for q in technical_queries:
+        assert evaluate_web_research_intent(q) is True, f"Expected True for technical query: {q}"
+
+
+@pytest.mark.asyncio
+async def test_classify_message_safety_includes_web_research_intent():
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '{"on_topic": true, "injection_attempt": false, "web_research_intent": false}'
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+    result = await classify_message_safety(
+        "¿Cómo empezamos esto?",
+        client=mock_client,
+    )
+
+    assert result.on_topic is True
+    assert result.injection_attempt is False
+    assert result.web_research_intent is False
+

@@ -693,6 +693,10 @@ describe("Technician Portal & AI Copilot Test Suite", () => {
       const draftInput = screen.getByTestId("draft-diagnostic-input");
       expect(draftInput).toHaveValue("Borrador generado por Ohm para el cliente");
 
+      // Main diagnostic notes textarea is also immediately populated
+      const notesInput = screen.getByTestId("diagnostic-notes-input");
+      expect(notesInput).toHaveValue("Borrador generado por Ohm para el cliente");
+
       // Generate button is now disabled because draft already exists
       expect(generateBtn).toBeDisabled();
 
