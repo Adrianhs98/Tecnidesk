@@ -10,6 +10,7 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 
 ### 🛠️ Workbench Operativo (Mesa de Trabajo de Alta Eficiencia)
 - **Alternador de Vistas (Lista & Kanban):** Visualización en lista tabular paginada o tablero interactivo Kanban organizado en 5 columnas operativas (*Ingreso / Recepción*, *En Revisión & Diagnóstico*, *Presupuesto & Espera*, *En Reparación*, *Listo para Retirar*) con persistencia de preferencia en `localStorage`.
+- **Consolidación de Modal de Detalle y Selector de 7 Estados (`TicketDetailModal`):** Unificación del detalle administrativo en `TicketDetailModal.jsx` erradicando modales duplicados en `AdminTicketCard`, con selector directo de los 7 estados (`ADMIN_STATUSES`) integrado en cabecera, mutación reactiva `PATCH /tickets/{id}/status` y sincronización bidireccional automática con la vista de Lista y el tablero Kanban.
 - **Ordenamiento SQL Inteligente:** Priorización en backend mediante `CASE` que ubica al inicio tickets sin técnico asignado, seguidos de aquellos con SLA vencido y finalmente por orden cronológico.
 - **Smart Action CTA:** Botón de acción rápida contextual (*Asignar* → *Diagnosticar* → *WhatsApp* → *Ver detalle*) para guiar al técnico hacia la acción prioritaria inmediata.
 - **Badges de Estado Unificados (`<StatusBadge />`):** Estandarización visual de estados en tarjetas y modales conforme a `DESIGN.md`, con tokens de color, fondo, borde e iconos contextuales compartidos entre Admin y Portal de Técnico.
@@ -97,7 +98,7 @@ TecniDesk centraliza el ingreso de equipos, gestión de clientes, órdenes de se
 - **Optimización Mobile P0:** Hero ultra-compacto (<640px) asegurando visibilidad inmediata del headline, la oferta "$0 Primer Mes / 100% Bonificado" y el CTA principal dentro del primer viewport (360x800, 390x844).
 - **Navbar Adaptativa <380px:** Ajuste elástico sin desbordes horizontales ni colisiones de controles en pantallas móviles compactas.
 - **Workflow Scroll-Driven de 4 Etapas:** Simulación interactiva del flujo del taller con track de 220vh en desktop (`LandingWorkflowDemo`) y avance narrativo (*01 Recibido* → *02 Diagnóstico* → *03 Aprobación* → *04 Listo*), sincronizado con tabs de acceso directo y fallback táctil sin sticky en móviles.
-- **Estación de Diagnóstico Ohm:** Stepper interactivo de 4 pasos (*Consulta*, *Memoria del Taller*, *Medición en Multímetro* y *Sugerencia Técnica*) con checklist de 3 puntos, tiempo estimado (~40 min) y panel visual de capitalización en la memoria privada del taller.
+- **Estación de Diagnóstico Ohm (Fidelidad Conversacional):** Stepper interactivo de 4 pasos (*Consulta*, *Memoria del Taller*, *Medición en Multímetro* y *Sugerencia Técnica*) con cita conversacional estructurada de casos históricos reales (#TK-7412) en el diálogo de Ohm, sin métricas porcentuales ficticias, reflejando fielmente la experiencia del chat (`AiChatDrawer`), checklist de 3 puntos, tiempo estimado (~40 min) y panel visual de capitalización en la memoria privada del taller.
 - **Ambient Tech Dinámico Global:** Atmósfera tecnológica en Canvas (`LandingAmbientTech`) con red de partículas y conexiones vivas por proximidad, modulación reactiva de intensidad por sección y soporte para `prefers-reduced-motion`.
 - **Resultados Cualitativos y Programa Piloto:** Secciones estructuradas (`LandingQualitativeResults`, `LandingPilotProgram`, `LandingContactForm`) enfocadas en conversión directa para talleres piloto.
 - **Notificación Contextual Sileo:** Toast emergente de conversión (`LandingToastProvider`) con trigger híbrido por intención de salida/scroll y control anti-spam en `sessionStorage` para postulación al Programa Piloto.
@@ -165,7 +166,7 @@ tecnidesk/
 │       │   ├── technician/   # Portal de técnico, mesa de trabajo y copiloto Ohm
 │       │   └── tracking/     # Portal público de rastreo para clientes
 │       ├── pages/            # Login, Registro, AdminAnalyticsPage y Páginas públicas
-│       ├── tests/            # 164 tests con Vitest y Testing Library (23 suites)
+│       ├── tests/            # 170 tests con Vitest y Testing Library (24 suites)
 │       ├── utils/            # Utilidades (PII masking, formateo de fechas y moneda)
 │       ├── App.css           # Estilos Workbench y temas OKLCH
 │       └── App.jsx           # Rutas y enrutador principal
@@ -307,7 +308,7 @@ La suite de frontend prueba componentes visuales, interactividad del Workbench K
 ```bash
 cd frontend
 
-# Ejecutar todos los tests (164 tests pasando al 100% en 23 suites)
+# Ejecutar todos los tests (170 tests pasando al 100% en 24 suites)
 npm test
 
 # Ejecutar con reporte de cobertura
